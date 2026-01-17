@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Node
+node_modules/
+npm-debug.log*
+
+# IDE/Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Claude Code settings
+.claude/
+
+# Logs
+logs/
+*.log
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Model artifacts (optional - can be large)
+models/saved/*.pt
+models/saved/*.pth
+models/scalers/*.pkl
+
+# Windows artifacts
+nul
+Thumbs.db
+
+# macOS
+.DS_Store

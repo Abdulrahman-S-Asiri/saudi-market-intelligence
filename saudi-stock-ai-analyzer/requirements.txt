@@ -1,0 +1,18 @@
+# Saudi Stock AI Analyzer - Dependencies
+
+# Data handling
+pandas>=2.0.0
+numpy>=1.24.0
+yfinance>=0.2.0
+
+# Machine Learning
+torch>=2.0.0
+scikit-learn>=1.3.0
+
+# Web Framework
+fastapi>=0.100.0
+uvicorn>=0.23.0
+python-multipart>=0.0.6
+
+# Technical Analysis (optional - we implement our own)
+# ta>=0.10.0
