@@ -31,7 +31,7 @@ SAUDI_STOCKS = {
 DEFAULT_STOCK = "2222"
 
 # Data Configuration
-DEFAULT_PERIOD = "1y"
+DEFAULT_PERIOD = "2y"  # Increased from 1y for more training data
 DEFAULT_INTERVAL = "1d"
 
 # Technical Indicator Parameters
@@ -53,8 +53,9 @@ INDICATORS = {
 }
 
 # RSI Thresholds (base values - adaptive thresholds adjust these)
-RSI_OVERSOLD = 30
-RSI_OVERBOUGHT = 70
+# Optimized for higher win rate: more extreme values reduce false signals
+RSI_OVERSOLD = 25
+RSI_OVERBOUGHT = 75
 
 # MACD Thresholds (for histogram)
 MACD_THRESHOLD = 0.0
@@ -69,8 +70,8 @@ LSTM_CONFIG = {
     "dropout": 0.3,             # Dropout rate
     "learning_rate": 0.001,     # Initial learning rate
     "batch_size": 32,           # Training batch size
-    "epochs": 100,              # Maximum training epochs
-    "patience": 10,             # Early stopping patience
+    "epochs": 150,              # Maximum training epochs (increased from 100)
+    "patience": 15,             # Early stopping patience (increased from 10)
     "train_split": 0.7,         # Training data split
     "val_split": 0.15,          # Validation data split
     "test_split": 0.15,         # Test data split
@@ -78,18 +79,33 @@ LSTM_CONFIG = {
     "bidirectional": False,     # Use bidirectional LSTM
     "lr_scheduler_factor": 0.5, # LR reduction factor
     "lr_scheduler_patience": 5, # LR scheduler patience
+    "use_walk_forward": True,   # Use walk-forward validation
+    "walk_forward_periods": 5,  # Number of walk-forward periods
 }
 
-# Features for LSTM model (expanded with new indicators)
+# Features for LSTM model (expanded to 20+ features for better predictions)
 LSTM_FEATURES = [
     "Close",
     "Volume",
+    "High",
+    "Low",
     "SMA_20",
     "SMA_50",
+    "EMA_12",
+    "EMA_26",
     "RSI",
     "MACD",
+    "MACD_Signal",
+    "MACD_Histogram",
     "ATR",
     "OBV",
+    "Stochastic_K",
+    "Williams_R",
+    "ADX",
+    "BB_Width",
+    "ROC",
+    "Momentum",
+    "Daily_Return",
 ]
 
 # Extended features (optional - for ensemble model)
@@ -124,7 +140,7 @@ ENSEMBLE_CONFIG = {
 
 # Trading Strategy Configuration
 STRATEGY_CONFIG = {
-    "min_confidence": 60,       # Minimum confidence for signal (0-100)
+    "min_confidence": 75,       # Minimum confidence for signal (0-100) - increased from 60 for higher win rate
     "position_size": 0.1,       # Default position size (10% of portfolio)
     "stop_loss": 0.05,          # Stop loss percentage (5%)
     "take_profit": 0.10,        # Take profit percentage (10%)
@@ -132,17 +148,19 @@ STRATEGY_CONFIG = {
     "use_regime_detection": True,     # Detect market regime
     "hysteresis_periods": 3,          # Signal change delay periods
     "volume_confirmation": True,      # Require volume confirmation
+    "require_multi_indicator": True,  # Require multiple indicator confirmation
+    "min_confirming_indicators": 3,   # Minimum indicators that must agree
 }
 
 # Adaptive Threshold Configuration
 ADAPTIVE_THRESHOLDS = {
-    "rsi_base_oversold": 30,
-    "rsi_base_overbought": 70,
+    "rsi_base_oversold": 25,       # Updated from 30 for stricter signals
+    "rsi_base_overbought": 75,     # Updated from 70 for stricter signals
     "rsi_adjustment_factor": 0.5,  # Volatility adjustment
     "macd_base_threshold": 0.0,
     "volatility_lookback": 20,     # Days to calculate volatility
-    "min_rsi_threshold": 20,       # Minimum RSI threshold
-    "max_rsi_threshold": 80,       # Maximum RSI threshold
+    "min_rsi_threshold": 15,       # Minimum RSI threshold (more extreme)
+    "max_rsi_threshold": 85,       # Maximum RSI threshold (more extreme)
 }
 
 # Regime Detection Configuration
@@ -159,8 +177,8 @@ BACKTEST_CONFIG = {
     "position_size": 0.1,       # Position size as fraction of capital
     "commission": 0.001,        # Commission per trade (0.1%)
     "slippage": 0.001,          # Slippage estimate (0.1%)
-    "default_hold_period": 5,   # Default holding period in days
-    "min_confidence": 60,       # Minimum confidence for trades
+    "default_hold_period": 10,  # Default holding period in days (increased from 5)
+    "min_confidence": 75,       # Minimum confidence for trades (increased from 60)
     "use_stop_loss": True,      # Enable stop loss
     "use_take_profit": True,    # Enable take profit
 }

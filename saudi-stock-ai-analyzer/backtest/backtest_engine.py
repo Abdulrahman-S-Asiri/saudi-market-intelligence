@@ -15,6 +15,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from strategy.trading_strategy import TradingStrategy
 from backtest.performance_metrics import PerformanceMetrics
+from backtest.win_rate_tracker import WinRateTracker
 
 
 @dataclass
@@ -60,7 +61,8 @@ class BacktestEngine:
         initial_capital: float = 100000,
         position_size: float = 0.1,
         commission: float = 0.001,
-        slippage: float = 0.001
+        slippage: float = 0.001,
+        track_win_rate: bool = True
     ):
         self.initial_capital = initial_capital
         self.position_size = position_size
@@ -68,13 +70,22 @@ class BacktestEngine:
         self.slippage = slippage
         self.strategy = TradingStrategy()
         self.metrics = PerformanceMetrics()
+        self.track_win_rate = track_win_rate
+        self.win_rate_tracker = WinRateTracker() if track_win_rate else None
+        self.current_symbol = "UNKNOWN"
+
+    def set_symbol(self, symbol: str):
+        """Set the current symbol being tested"""
+        self.current_symbol = symbol
 
     def run(
         self,
         df: pd.DataFrame,
-        min_confidence: float = 60,
-        hold_period: int = 5,
-        use_stop_loss: bool = True
+        min_confidence: float = 75,
+        hold_period: int = 10,
+        use_stop_loss: bool = True,
+        auto_record: bool = True,
+        symbol: str = None
     ) -> BacktestResult:
         """
         Run backtest on historical data
@@ -180,7 +191,27 @@ class BacktestEngine:
             equity_curve.append(current_capital)
 
         # Calculate results
-        return self._calculate_results(trades, equity_curve)
+        result = self._calculate_results(trades, equity_curve)
+
+        # Auto-record to win rate tracker
+        if auto_record and self.track_win_rate and self.win_rate_tracker and result.total_trades > 0:
+            sym = symbol or self.current_symbol
+            self.win_rate_tracker.record_experiment(
+                symbol=sym,
+                win_rate=result.win_rate,
+                total_trades=result.total_trades,
+                profit_factor=result.profit_factor,
+                sharpe_ratio=result.sharpe_ratio,
+                total_return=result.total_return,
+                max_drawdown=result.max_drawdown,
+                parameters={
+                    'min_confidence': min_confidence,
+                    'hold_period': hold_period,
+                    'use_stop_loss': use_stop_loss
+                }
+            )
+
+        return result
 
     def _calculate_pnl(self, entry: float, exit: float, trade_type: str) -> float:
         """Calculate percentage P&L"""
@@ -348,22 +379,23 @@ if __name__ == "__main__":
     from data.data_loader import SaudiStockDataLoader
     from data.data_preprocessor import DataPreprocessor
 
-    print("Testing Backtest Engine...")
+    print("Testing Backtest Engine (Optimized for 80% Win Rate)...")
     print("=" * 60)
 
     loader = SaudiStockDataLoader()
     preprocessor = DataPreprocessor()
 
-    raw_data = loader.fetch_stock_data("2222", period="1y")
+    raw_data = loader.fetch_stock_data("2222", period="2y")
     clean_data = preprocessor.clean_data(raw_data)
     df = preprocessor.add_technical_indicators(clean_data)
 
     print(f"Backtesting on {len(df)} days of data")
 
-    engine = BacktestEngine()
+    engine = BacktestEngine(track_win_rate=True)
+    engine.set_symbol("2222")
 
-    # Run full backtest
-    result = engine.run(df, min_confidence=60, hold_period=5)
+    # Run full backtest with optimized parameters
+    result = engine.run(df, min_confidence=75, hold_period=10, symbol="2222")
 
     print(f"\n--- Backtest Results ---")
     print(f"Total Trades: {result.total_trades}")
@@ -374,11 +406,23 @@ if __name__ == "__main__":
     print(f"Sharpe Ratio: {result.sharpe_ratio:.2f}")
     print(f"Sortino Ratio: {result.sortino_ratio:.2f}")
 
-    # Run signal accuracy test
-    accuracy = engine.run_signal_backtest(df)
-    print(f"\n--- Signal Accuracy ---")
+    # Check progress toward 80% goal
+    print(f"\n--- Progress Toward 80% Goal ---")
+    if result.win_rate >= 80:
+        print("*** TARGET ACHIEVED! ***")
+    else:
+        gap = 80 - result.win_rate
+        print(f"Gap to 80%: {gap:.1f}%")
+
+    # Run signal accuracy test with higher forward period
+    accuracy = engine.run_signal_backtest(df, forward_periods=10)
+    print(f"\n--- Signal Accuracy (10-day forward) ---")
     print(f"Total Signals: {accuracy['total_signals']}")
     print(f"Accuracy: {accuracy['accuracy']}%")
     print(f"High Confidence Accuracy: {accuracy['high_confidence_accuracy']}%")
     print(f"Buy Accuracy: {accuracy['buy_accuracy']}%")
     print(f"Sell Accuracy: {accuracy['sell_accuracy']}%")
+
+    # Print win rate tracker report
+    if engine.win_rate_tracker:
+        engine.win_rate_tracker.print_full_report()

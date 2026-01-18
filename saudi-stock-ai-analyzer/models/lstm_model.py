@@ -435,6 +435,248 @@ class StockPredictor:
         }
 
 
+class WalkForwardValidator:
+    """
+    Walk-forward validation for more realistic performance estimation.
+    Trains on expanding window, tests on subsequent periods.
+    """
+
+    def __init__(self, n_splits: int = 5, min_train_size: float = 0.5):
+        """
+        Args:
+            n_splits: Number of walk-forward periods
+            min_train_size: Minimum fraction of data for first training window
+        """
+        self.n_splits = n_splits
+        self.min_train_size = min_train_size
+        self.results = []
+
+    def split(self, X: np.ndarray, y: np.ndarray):
+        """
+        Generate walk-forward train/test splits.
+
+        Yields:
+            Tuples of (X_train, y_train, X_test, y_test, split_info)
+        """
+        n_samples = len(X)
+        min_train = int(n_samples * self.min_train_size)
+        test_size = (n_samples - min_train) // self.n_splits
+
+        for i in range(self.n_splits):
+            train_end = min_train + (i * test_size)
+            test_end = train_end + test_size
+
+            if test_end > n_samples:
+                test_end = n_samples
+
+            X_train = X[:train_end]
+            y_train = y[:train_end]
+            X_test = X[train_end:test_end]
+            y_test = y[train_end:test_end]
+
+            split_info = {
+                'split': i + 1,
+                'train_size': len(X_train),
+                'test_size': len(X_test),
+                'train_end_idx': train_end,
+                'test_end_idx': test_end
+            }
+
+            yield X_train, y_train, X_test, y_test, split_info
+
+    def validate(self, predictor_class, X: np.ndarray, y: np.ndarray,
+                 input_size: int, epochs: int = 50, verbose: bool = True) -> Dict:
+        """
+        Perform walk-forward validation.
+
+        Args:
+            predictor_class: Class to instantiate for each split
+            X: Full feature array
+            y: Full target array
+            input_size: Input size for predictor
+            epochs: Training epochs per split
+            verbose: Print progress
+
+        Returns:
+            Dictionary with validation results
+        """
+        self.results = []
+        all_predictions = []
+        all_actuals = []
+
+        for X_train, y_train, X_test, y_test, split_info in self.split(X, y):
+            if verbose:
+                print(f"\nWalk-Forward Split {split_info['split']}/{self.n_splits}")
+                print(f"  Train: {split_info['train_size']} samples")
+                print(f"  Test: {split_info['test_size']} samples")
+
+            # Create and train model
+            predictor = predictor_class(input_size=input_size)
+
+            # Use 10% of training data as validation
+            val_size = int(len(X_train) * 0.1)
+            X_tr = X_train[:-val_size] if val_size > 0 else X_train
+            y_tr = y_train[:-val_size] if val_size > 0 else y_train
+            X_val = X_train[-val_size:] if val_size > 0 else None
+            y_val = y_train[-val_size:] if val_size > 0 else None
+
+            predictor.train(X_tr, y_tr, X_val, y_val, epochs=epochs, verbose=False)
+
+            # Predict on test set
+            predictions = predictor.predict(X_test)
+            all_predictions.extend(predictions)
+            all_actuals.extend(y_test)
+
+            # Calculate metrics for this split
+            mse = np.mean((predictions - y_test) ** 2)
+            mae = np.mean(np.abs(predictions - y_test))
+
+            # Direction accuracy
+            if len(y_test) > 1:
+                pred_direction = np.sign(predictions[1:] - predictions[:-1])
+                actual_direction = np.sign(y_test[1:] - y_test[:-1])
+                direction_accuracy = np.mean(pred_direction == actual_direction) * 100
+            else:
+                direction_accuracy = 0
+
+            split_result = {
+                'split': split_info['split'],
+                'mse': float(mse),
+                'mae': float(mae),
+                'direction_accuracy': float(direction_accuracy)
+            }
+            self.results.append(split_result)
+
+            if verbose:
+                print(f"  MSE: {mse:.6f}, MAE: {mae:.6f}")
+                print(f"  Direction Accuracy: {direction_accuracy:.1f}%")
+
+        # Aggregate results
+        avg_mse = np.mean([r['mse'] for r in self.results])
+        avg_mae = np.mean([r['mae'] for r in self.results])
+        avg_direction_acc = np.mean([r['direction_accuracy'] for r in self.results])
+
+        return {
+            'n_splits': self.n_splits,
+            'avg_mse': float(avg_mse),
+            'avg_mae': float(avg_mae),
+            'avg_direction_accuracy': float(avg_direction_acc),
+            'split_results': self.results,
+            'all_predictions': all_predictions,
+            'all_actuals': all_actuals
+        }
+
+
+class ConfidenceCalibrator:
+    """
+    Calibrate model confidence based on historical accuracy.
+    Uses isotonic regression for calibration.
+    """
+
+    def __init__(self):
+        self.calibration_map = {}
+        self.is_calibrated = False
+
+    def calibrate(self, predictions: np.ndarray, actuals: np.ndarray,
+                  confidences: np.ndarray, n_bins: int = 10) -> Dict:
+        """
+        Calibrate confidence scores based on historical accuracy.
+
+        Args:
+            predictions: Model predictions
+            actuals: Actual values
+            confidences: Original confidence scores (0-1 or 0-100)
+            n_bins: Number of bins for calibration
+
+        Returns:
+            Calibration results
+        """
+        # Normalize confidences to 0-100
+        if np.max(confidences) <= 1:
+            confidences = confidences * 100
+
+        # Calculate actual accuracy at each confidence level
+        bin_edges = np.linspace(0, 100, n_bins + 1)
+        calibration_data = []
+
+        for i in range(n_bins):
+            bin_mask = (confidences >= bin_edges[i]) & (confidences < bin_edges[i+1])
+            if np.sum(bin_mask) > 0:
+                bin_preds = predictions[bin_mask]
+                bin_actuals = actuals[bin_mask]
+
+                # Direction accuracy
+                if len(bin_preds) > 1:
+                    pred_correct = np.sum(
+                        (bin_preds > 0) == (bin_actuals > 0)
+                    )
+                    actual_accuracy = pred_correct / len(bin_preds) * 100
+                else:
+                    actual_accuracy = 50
+
+                bin_center = (bin_edges[i] + bin_edges[i+1]) / 2
+                calibration_data.append({
+                    'bin_center': bin_center,
+                    'stated_confidence': bin_center,
+                    'actual_accuracy': actual_accuracy,
+                    'n_samples': int(np.sum(bin_mask))
+                })
+
+                self.calibration_map[bin_center] = actual_accuracy
+
+        self.is_calibrated = True
+
+        # Calculate calibration error
+        if calibration_data:
+            calibration_error = np.mean([
+                abs(d['stated_confidence'] - d['actual_accuracy'])
+                for d in calibration_data
+            ])
+        else:
+            calibration_error = 0
+
+        return {
+            'calibration_data': calibration_data,
+            'calibration_error': calibration_error,
+            'is_calibrated': True
+        }
+
+    def calibrate_confidence(self, raw_confidence: float) -> float:
+        """
+        Apply calibration to a raw confidence score.
+
+        Args:
+            raw_confidence: Original confidence (0-100)
+
+        Returns:
+            Calibrated confidence (0-100)
+        """
+        if not self.is_calibrated or not self.calibration_map:
+            return raw_confidence
+
+        # Find nearest calibration bin
+        bin_centers = sorted(self.calibration_map.keys())
+        nearest_bin = min(bin_centers, key=lambda x: abs(x - raw_confidence))
+
+        # Linear interpolation between bins
+        calibrated = self.calibration_map[nearest_bin]
+
+        # Blend with original to avoid over-correction
+        blended = 0.7 * calibrated + 0.3 * raw_confidence
+
+        return max(0, min(100, blended))
+
+    def get_calibration_curve(self) -> Dict:
+        """Get calibration curve data for plotting"""
+        if not self.calibration_map:
+            return {'stated': [], 'actual': []}
+
+        stated = sorted(self.calibration_map.keys())
+        actual = [self.calibration_map[s] for s in stated]
+
+        return {'stated': stated, 'actual': actual}
+
+
 class ModelCache:
     """Cache manager for trained models"""
 

@@ -1,0 +1,57 @@
+[
+  {
+    "timestamp": "2026-01-18T03:33:20.790049",
+    "signal": "SELL",
+    "confidence": 58.1,
+    "price": 24.799999237060547,
+    "indicators": {
+      "rsi": 73.45454368906451,
+      "macd": 0.1084432199445935,
+      "regime": "strong_uptrend"
+    }
+  },
+  {
+    "timestamp": "2026-01-18T03:37:38.354264",
+    "signal": "SELL",
+    "confidence": 58.1,
+    "price": 24.799999237060547,
+    "indicators": {
+      "rsi": 73.45454368906451,
+      "macd": 0.10844322012755825,
+      "regime": "strong_uptrend"
+    }
+  },
+  {
+    "timestamp": "2026-01-18T03:37:39.243071",
+    "signal": "SELL",
+    "confidence": 58.1,
+    "price": 24.799999237060547,
+    "indicators": {
+      "rsi": 73.45454368906451,
+      "macd": 0.10844322012755825,
+      "regime": "strong_uptrend"
+    }
+  },
+  {
+    "timestamp": "2026-01-18T03:58:41.441052",
+    "signal": "SELL",
+    "confidence": 58.1,
+    "price": 24.799999237060547,
+    "indicators": {
+      "rsi": 73.45454368906451,
+      "macd": 0.10844322012755825,
+      "regime": "strong_uptrend"
+    }
+  },
+  {
+    "timestamp": "2026-01-18T03:58:42.327640",
+    "signal": "SELL",
+    "confidence": 58.1,
+    "price": 24.799999237060547,
+    "indicators": {
+      "rsi": 73.45454368906451,
+      "macd": 0.1084432199445935,
+      "regime": "strong_uptrend"
+    }
+  }
+]

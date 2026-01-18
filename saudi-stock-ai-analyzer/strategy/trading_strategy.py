@@ -12,7 +12,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.config import RSI_OVERSOLD, RSI_OVERBOUGHT, STRATEGY_CONFIG
+from utils.config import RSI_OVERSOLD, RSI_OVERBOUGHT, STRATEGY_CONFIG, REGIME_CONFIG
 
 
 class Signal(Enum):
@@ -43,6 +43,9 @@ class TradingSignal:
     regime: str
     stop_loss: Optional[float] = None
     take_profit: Optional[float] = None
+    indicators: Optional[Dict] = None
+    market_regime: Optional[str] = None
+    trend_strength: Optional[float] = None
 
 
 class AdaptiveThresholds:
@@ -158,6 +161,190 @@ class SignalHysteresis:
         return signal, confidence
 
 
+class MarketRegimeFilter:
+    """
+    Filter signals based on market regime to avoid counter-trend trades.
+    Only allow BUY in uptrends/sideways, SELL in downtrends/sideways.
+    """
+
+    def __init__(self):
+        self.trend_strength_threshold = REGIME_CONFIG.get('trend_strength_threshold', 0.02)
+        self.adx_trending_threshold = REGIME_CONFIG.get('adx_trending_threshold', 25)
+
+    def filter_signal(self, signal: str, confidence: float, regime: MarketRegime,
+                      trend_strength: float = 0) -> Tuple[str, float, List[str]]:
+        """
+        Filter signal based on market regime.
+
+        Returns:
+            Tuple of (filtered_signal, adjusted_confidence, filter_reasons)
+        """
+        reasons = []
+
+        # Strong uptrend - block SELL signals
+        if regime == MarketRegime.STRONG_UPTREND:
+            if signal == 'SELL':
+                reasons.append("SELL blocked in strong uptrend")
+                return 'HOLD', confidence * 0.5, reasons
+            elif signal == 'BUY':
+                confidence *= 1.1  # Boost confidence for trend-following
+                reasons.append("BUY boosted in strong uptrend")
+
+        # Strong downtrend - block BUY signals
+        elif regime == MarketRegime.STRONG_DOWNTREND:
+            if signal == 'BUY':
+                reasons.append("BUY blocked in strong downtrend")
+                return 'HOLD', confidence * 0.5, reasons
+            elif signal == 'SELL':
+                confidence *= 1.1
+                reasons.append("SELL boosted in strong downtrend")
+
+        # Regular uptrend - reduce SELL confidence
+        elif regime == MarketRegime.UPTREND:
+            if signal == 'SELL':
+                confidence *= 0.7
+                reasons.append("SELL confidence reduced in uptrend")
+            elif signal == 'BUY':
+                confidence *= 1.05
+
+        # Regular downtrend - reduce BUY confidence
+        elif regime == MarketRegime.DOWNTREND:
+            if signal == 'BUY':
+                confidence *= 0.7
+                reasons.append("BUY confidence reduced in downtrend")
+            elif signal == 'SELL':
+                confidence *= 1.05
+
+        # Sideways - slight penalty for both directions (mean reversion environment)
+        else:  # SIDEWAYS
+            # No adjustment needed - good for both BUY and SELL
+            pass
+
+        return signal, min(confidence, 100), reasons
+
+
+class MultiIndicatorConfirmation:
+    """
+    Require multiple indicators to agree before taking a trade.
+    Improves win rate by filtering out conflicting signals.
+    """
+
+    def __init__(self, min_confirming: int = 3):
+        self.min_confirming = min_confirming
+
+    def check_confirmation(self, df: pd.DataFrame, signal: str) -> Tuple[int, int, List[str]]:
+        """
+        Check how many indicators confirm the proposed signal.
+
+        Args:
+            df: DataFrame with indicator data
+            signal: Proposed signal ('BUY' or 'SELL')
+
+        Returns:
+            Tuple of (confirming_count, total_indicators, confirmation_reasons)
+        """
+        if len(df) < 2 or signal == 'HOLD':
+            return 0, 0, []
+
+        current = df.iloc[-1]
+        previous = df.iloc[-2]
+        confirmations = 0
+        total = 0
+        reasons = []
+
+        # 1. RSI Confirmation
+        if 'RSI' in current and not pd.isna(current['RSI']):
+            total += 1
+            rsi = current['RSI']
+            if signal == 'BUY' and rsi < 40:  # Oversold zone
+                confirmations += 1
+                reasons.append(f"RSI confirms BUY ({rsi:.1f} < 40)")
+            elif signal == 'SELL' and rsi > 60:  # Overbought zone
+                confirmations += 1
+                reasons.append(f"RSI confirms SELL ({rsi:.1f} > 60)")
+
+        # 2. MACD Confirmation
+        if 'MACD' in current and 'MACD_Signal' in current:
+            if not pd.isna(current['MACD']) and not pd.isna(current['MACD_Signal']):
+                total += 1
+                macd_bullish = current['MACD'] > current['MACD_Signal']
+                if signal == 'BUY' and macd_bullish:
+                    confirmations += 1
+                    reasons.append("MACD confirms BUY (above signal)")
+                elif signal == 'SELL' and not macd_bullish:
+                    confirmations += 1
+                    reasons.append("MACD confirms SELL (below signal)")
+
+        # 3. Moving Average Alignment
+        if 'SMA_20' in current and 'SMA_50' in current:
+            if not pd.isna(current['SMA_20']) and not pd.isna(current['SMA_50']):
+                total += 1
+                close = current['Close']
+                sma_20 = current['SMA_20']
+                sma_50 = current['SMA_50']
+                if signal == 'BUY' and close > sma_20 and sma_20 > sma_50:
+                    confirmations += 1
+                    reasons.append("MA alignment confirms BUY")
+                elif signal == 'SELL' and close < sma_20 and sma_20 < sma_50:
+                    confirmations += 1
+                    reasons.append("MA alignment confirms SELL")
+
+        # 4. Stochastic Confirmation
+        stoch_col = 'Stoch_K' if 'Stoch_K' in current else 'Stochastic_K' if 'Stochastic_K' in current else None
+        if stoch_col and not pd.isna(current[stoch_col]):
+            total += 1
+            stoch = current[stoch_col]
+            if signal == 'BUY' and stoch < 30:  # Oversold
+                confirmations += 1
+                reasons.append(f"Stochastic confirms BUY ({stoch:.1f} < 30)")
+            elif signal == 'SELL' and stoch > 70:  # Overbought
+                confirmations += 1
+                reasons.append(f"Stochastic confirms SELL ({stoch:.1f} > 70)")
+
+        # 5. Volume Confirmation
+        if 'Volume_Ratio' in current and not pd.isna(current['Volume_Ratio']):
+            total += 1
+            vol_ratio = current['Volume_Ratio']
+            if vol_ratio > 1.2:  # Above average volume confirms any move
+                confirmations += 1
+                reasons.append(f"Volume confirms signal ({vol_ratio:.1f}x avg)")
+        elif 'Volume' in current and 'Volume' in df.columns:
+            total += 1
+            avg_volume = df['Volume'].tail(20).mean()
+            if current['Volume'] > avg_volume * 1.2:
+                confirmations += 1
+                reasons.append("Above average volume confirms")
+
+        return confirmations, total, reasons
+
+    def apply_confirmation_filter(self, signal: str, confidence: float,
+                                   confirmations: int, total: int) -> Tuple[str, float]:
+        """
+        Adjust signal based on confirmation count.
+
+        Returns:
+            Tuple of (adjusted_signal, adjusted_confidence)
+        """
+        if signal == 'HOLD' or total == 0:
+            return signal, confidence
+
+        confirmation_rate = confirmations / total
+
+        # Need at least min_confirming indicators
+        if confirmations < self.min_confirming:
+            # Convert to HOLD if not enough confirmation
+            confidence_penalty = 0.5 + (confirmations / self.min_confirming) * 0.3
+            return 'HOLD', confidence * confidence_penalty
+
+        # Boost confidence based on confirmation rate
+        if confirmation_rate >= 0.8:  # 80%+ agreement
+            confidence *= 1.15
+        elif confirmation_rate >= 0.6:  # 60-80% agreement
+            confidence *= 1.05
+
+        return signal, min(confidence, 100)
+
+
 class TradingStrategy:
     """Enhanced trading strategy with adaptive thresholds, regime detection, and hysteresis"""
 
@@ -165,7 +352,12 @@ class TradingStrategy:
         self.adaptive_thresholds = AdaptiveThresholds()
         self.regime_detector = RegimeDetector()
         self.hysteresis = SignalHysteresis(cooldown_periods=3)
-        self.min_confidence = STRATEGY_CONFIG['min_confidence'] * 100
+        self.regime_filter = MarketRegimeFilter()
+        self.multi_indicator = MultiIndicatorConfirmation(
+            min_confirming=STRATEGY_CONFIG.get('min_confirming_indicators', 3)
+        )
+        self.min_confidence = STRATEGY_CONFIG['min_confidence']
+        self.require_multi_indicator = STRATEGY_CONFIG.get('require_multi_indicator', True)
         self.signal_history = []
 
     def generate_signal(
@@ -205,19 +397,47 @@ class TradingStrategy:
         action, confidence = self._determine_action(combined_score, tech_score, lstm_score, regime_adjustments)
         action, confidence = self.hysteresis.filter_signal(action, confidence)
 
+        # Apply market regime filter - block counter-trend signals
+        if action != 'HOLD':
+            action, confidence, regime_reasons = self.regime_filter.filter_signal(
+                action, confidence, regime
+            )
+            tech_reasons.extend(regime_reasons)
+
+        # Apply multi-indicator confirmation filter
+        if action != 'HOLD' and self.require_multi_indicator:
+            confirmations, total, confirm_reasons = self.multi_indicator.check_confirmation(df, action)
+            action, confidence = self.multi_indicator.apply_confirmation_filter(
+                action, confidence, confirmations, total
+            )
+            if confirm_reasons:
+                tech_reasons.extend(confirm_reasons[:2])  # Add top 2 confirmation reasons
+
         if action != 'HOLD' and 'Volume_Ratio' in current:
             if current['Volume_Ratio'] < thresholds['volume_threshold']:
                 confidence *= 0.85
                 tech_reasons.append("Low volume - reduced confidence")
 
         all_reasons = tech_reasons + lstm_reasons
-        stop_loss, take_profit = self._calculate_exit_levels(current_price, action, df)
+        stop_loss, take_profit = self._calculate_exit_levels(current_price, action, df, confidence)
+
+        # Build indicators dictionary from current data
+        indicators = {}
+        indicator_columns = ['RSI', 'MACD', 'MACD_Signal', 'SMA_20', 'SMA_50', 'ATR', 'ADX', 'Stoch_K', 'Williams_R']
+        for col in indicator_columns:
+            if col in current and not pd.isna(current[col]):
+                indicators[col] = float(current[col])
+        # Map Stoch_K to Stochastic_K for compatibility
+        if 'Stoch_K' in indicators:
+            indicators['Stochastic_K'] = indicators['Stoch_K']
 
         signal = TradingSignal(
             action=action, confidence=round(confidence, 1), price=current_price,
             reasons=all_reasons[:5], technical_score=round(tech_score, 1),
             lstm_score=round(lstm_score, 1), regime=regime.value,
-            stop_loss=stop_loss, take_profit=take_profit
+            stop_loss=stop_loss, take_profit=take_profit,
+            indicators=indicators, market_regime=regime.value,
+            trend_strength=abs(combined_score - 50) / 50
         )
 
         self.signal_history.append({'timestamp': df.index[-1] if hasattr(df.index, '__getitem__') else None, 'signal': signal})
@@ -345,19 +565,40 @@ class TradingStrategy:
 
         return action, max(0, min(100, confidence))
 
-    def _calculate_exit_levels(self, price: float, action: str, df: pd.DataFrame) -> Tuple[Optional[float], Optional[float]]:
-        """Calculate stop loss and take profit levels"""
+    def _calculate_exit_levels(self, price: float, action: str, df: pd.DataFrame,
+                                confidence: float = 75) -> Tuple[Optional[float], Optional[float]]:
+        """
+        Calculate stop loss and take profit levels with dynamic multipliers based on confidence.
+
+        High confidence (85%+): Tighter SL, wider TP (SL=2.0×ATR, TP=4.0×ATR)
+        Medium confidence (75%+): Moderate (SL=2.5×ATR, TP=3.5×ATR)
+        Lower confidence: Wider SL, tighter TP (SL=3.0×ATR, TP=3.0×ATR)
+        """
         if action == 'HOLD':
             return None, None
 
-        atr = df['ATR'].iloc[-1] if 'ATR' in df.columns else price * 0.02
+        atr = df['ATR'].iloc[-1] if 'ATR' in df.columns and not pd.isna(df['ATR'].iloc[-1]) else price * 0.02
+
+        # Dynamic multipliers based on confidence
+        if confidence >= 85:
+            # High confidence - tighter stop, wider target
+            sl_mult = 2.0
+            tp_mult = 4.0
+        elif confidence >= 75:
+            # Medium confidence - balanced
+            sl_mult = 2.5
+            tp_mult = 3.5
+        else:
+            # Lower confidence - wider stop, conservative target
+            sl_mult = 3.0
+            tp_mult = 3.0
 
         if action == 'BUY':
-            stop_loss = price - (atr * 2)
-            take_profit = price + (atr * 3)
+            stop_loss = price - (atr * sl_mult)
+            take_profit = price + (atr * tp_mult)
         else:
-            stop_loss = price + (atr * 2)
-            take_profit = price - (atr * 3)
+            stop_loss = price + (atr * sl_mult)
+            take_profit = price - (atr * tp_mult)
 
         return round(stop_loss, 2), round(take_profit, 2)
 
@@ -413,7 +654,9 @@ class TradingStrategy:
             'action': signal.action, 'confidence': signal.confidence, 'price': signal.price,
             'reasons': signal.reasons, 'technical_score': signal.technical_score,
             'lstm_score': signal.lstm_score, 'regime': signal.regime,
-            'stop_loss': signal.stop_loss, 'take_profit': signal.take_profit
+            'stop_loss': signal.stop_loss, 'take_profit': signal.take_profit,
+            'indicators': signal.indicators, 'market_regime': signal.market_regime,
+            'trend_strength': signal.trend_strength
         }
 
 
