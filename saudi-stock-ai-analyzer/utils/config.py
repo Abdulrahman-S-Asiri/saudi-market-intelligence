@@ -138,6 +138,23 @@ ENSEMBLE_CONFIG = {
     "xgb_learning_rate": 0.05,  # XGBoost learning rate
 }
 
+# Chronos-2 Model Configuration
+CHRONOS_CONFIG = {
+    "model_name": "amazon/chronos-t5-small",  # Options: -small, -base, -large
+    "prediction_length": 5,        # Days to forecast
+    "context_length": 60,          # Historical days to use as context
+    "quantile_levels": [0.1, 0.5, 0.9],  # Quantiles for confidence intervals
+    "device": "cpu",               # Device for inference (cpu or cuda)
+    "num_samples": 20,             # Samples for uncertainty estimation
+}
+
+# Model Selection Configuration
+MODEL_SELECTION = {
+    "default_model": "ensemble",   # Options: 'lstm', 'ensemble', 'chronos'
+    "available_models": ["lstm", "ensemble", "chronos"],
+    "fallback_model": "lstm",      # Fallback when selected model unavailable
+}
+
 # Trading Strategy Configuration
 STRATEGY_CONFIG = {
     "min_confidence": 75,       # Minimum confidence for signal (0-100) - increased from 60 for higher win rate

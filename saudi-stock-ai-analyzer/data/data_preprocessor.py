@@ -6,7 +6,7 @@ FIXED: Data leakage issue - scaler now fits only on training data
 
 import pandas as pd
 import numpy as np
-from typing import Tuple, List, Optional, Dict
+from typing import Tuple, List, Optional, Dict, Any
 from sklearn.preprocessing import MinMaxScaler
 import joblib
 import os
@@ -380,6 +380,51 @@ class DataPreprocessor:
         dummy[:, 0] = scaled_price.flatten()
         unscaled = self.scaler.inverse_transform(dummy)
         return unscaled[:, 0]
+
+    def prepare_lstm_data_with_split(
+        self,
+        df: pd.DataFrame,
+        features: List[str] = None,
+        sequence_length: int = None,
+        train_split: float = None,
+        val_split: float = None
+    ) -> Dict[str, np.ndarray]:
+        """
+        Prepare data for LSTM model training with proper train/val/test split
+        Returns a dictionary for easier access.
+
+        Args:
+            df: DataFrame with technical indicators
+            features: List of feature columns to use
+            sequence_length: Number of time steps to look back
+            train_split: Ratio of training data
+            val_split: Ratio of validation data
+
+        Returns:
+            Dictionary with X_train, X_val, X_test, y_train, y_val, y_test, scaler
+        """
+        if train_split is None:
+            train_split = LSTM_CONFIG.get('train_split', 0.7)
+        if val_split is None:
+            val_split = LSTM_CONFIG.get('val_split', 0.15)
+
+        X_train, X_val, X_test, y_train, y_val, y_test, scaler = self.prepare_lstm_data(
+            df,
+            features=features,
+            sequence_length=sequence_length,
+            train_split=train_split,
+            val_split=val_split
+        )
+
+        return {
+            'X_train': X_train,
+            'X_val': X_val,
+            'X_test': X_test,
+            'y_train': y_train,
+            'y_val': y_val,
+            'y_test': y_test,
+            'scaler': scaler
+        }
 
     def get_latest_sequence(
         self,

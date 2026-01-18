@@ -16,6 +16,7 @@ from data.data_loader import SaudiStockDataLoader
 from data.data_preprocessor import DataPreprocessor
 from models.lstm_model import StockPredictor, ModelCache
 from models.ensemble_model import EnsemblePredictor, HAS_XGBOOST
+from models.chronos_model import ChronosPredictor, HAS_CHRONOS, check_chronos_availability
 from strategy.trading_strategy import TradingStrategy
 from backtest.backtest_engine import BacktestEngine
 from backtest.performance_metrics import (
@@ -28,7 +29,7 @@ from backtest.performance_metrics import (
 )
 from utils.config import (
     SAUDI_STOCKS, DEFAULT_STOCK, LSTM_CONFIG, LSTM_FEATURES,
-    MODEL_SAVE_PATH, SIGNAL_HISTORY_PATH
+    MODEL_SAVE_PATH, SIGNAL_HISTORY_PATH, CHRONOS_CONFIG, MODEL_SELECTION
 )
 
 
@@ -83,16 +84,22 @@ class SignalHistoryManager:
 class StockAnalyzer:
     """
     Main analyzer class that orchestrates the complete analysis pipeline
-    Features model caching and ensemble predictions
+    Features model caching, ensemble predictions, and Chronos-2 forecasting
     """
 
-    def __init__(self, use_ensemble: bool = True, cache_max_age: int = 86400):
+    def __init__(
+        self,
+        use_ensemble: bool = True,
+        cache_max_age: int = 86400,
+        model_type: str = None
+    ):
         """
         Initialize the stock analyzer
 
         Args:
-            use_ensemble: Whether to use ensemble model (LSTM + XGBoost)
+            use_ensemble: Whether to use ensemble model (LSTM + XGBoost) - legacy param
             cache_max_age: Maximum age of cached models in seconds (default 24 hours)
+            model_type: Model to use ('lstm', 'ensemble', 'chronos'). Overrides use_ensemble.
         """
         self.loader = SaudiStockDataLoader()
         self.preprocessor = DataPreprocessor()
@@ -104,15 +111,29 @@ class StockAnalyzer:
 
         # Model caching
         self.model_cache = ModelCache(cache_dir=MODEL_SAVE_PATH, max_age_hours=cache_max_age // 3600)
-        self.use_ensemble = use_ensemble and HAS_XGBOOST
         self.ensemble_models = {}
+
+        # Model selection
+        if model_type:
+            self._model_type = model_type
+        elif use_ensemble and HAS_XGBOOST:
+            self._model_type = "ensemble"
+        else:
+            self._model_type = MODEL_SELECTION.get("default_model", "lstm")
+
+        # Legacy compatibility
+        self.use_ensemble = self._model_type == "ensemble" and HAS_XGBOOST
+
+        # Chronos predictor (lazy initialized)
+        self._chronos_predictor = None
 
     def analyze_stock(
         self,
         symbol: str,
         period: str = "1y",
         train_model: bool = True,
-        force_retrain: bool = False
+        force_retrain: bool = False,
+        model_type: str = None
     ) -> Dict:
         """
         Perform complete analysis on a stock
@@ -122,11 +143,14 @@ class StockAnalyzer:
             period: Data period to fetch
             train_model: Whether to train/use ML model
             force_retrain: Force model retraining even if cached
+            model_type: Override model type ('lstm', 'ensemble', 'chronos')
 
         Returns:
             Dictionary with complete analysis results
         """
-        print(f"Analyzing {symbol}...")
+        # Use specified model_type or fall back to instance default
+        active_model_type = model_type or self._model_type
+        print(f"Analyzing {symbol} with {active_model_type} model...")
 
         # 1. Fetch data
         raw_data = self.loader.fetch_stock_data(symbol, period=period)
@@ -144,15 +168,21 @@ class StockAnalyzer:
         ml_prediction = None
         ml_confidence = None
         model_info = None
+        price_range = None
 
         if train_model and len(processed_data) > LSTM_CONFIG['sequence_length'] + 50:
             try:
-                ml_result = self._get_ml_prediction(
-                    symbol, processed_data, force_retrain=force_retrain
-                )
+                if active_model_type == "chronos":
+                    ml_result = self._get_chronos_prediction(processed_data)
+                else:
+                    ml_result = self._get_ml_prediction(
+                        symbol, processed_data, force_retrain=force_retrain,
+                        use_ensemble=(active_model_type == "ensemble")
+                    )
                 ml_prediction = ml_result.get('direction')
                 ml_confidence = ml_result.get('confidence')
                 model_info = ml_result.get('model_info')
+                price_range = ml_result.get('price_range')
             except Exception as e:
                 print(f"ML prediction failed: {e}")
                 import traceback
@@ -203,8 +233,9 @@ class StockAnalyzer:
             'ml_prediction': {
                 'direction': ml_prediction,
                 'confidence': round(ml_confidence * 100, 1) if ml_confidence else None,
-                'model_type': 'ensemble' if self.use_ensemble else 'lstm',
-                'model_info': model_info
+                'model_type': active_model_type,
+                'model_info': model_info,
+                'price_range': price_range
             } if ml_prediction else None,
             'indicators': {
                 'rsi': round(signal.indicators.get('RSI', 50), 2),
@@ -237,7 +268,8 @@ class StockAnalyzer:
         self,
         symbol: str,
         df,
-        force_retrain: bool = False
+        force_retrain: bool = False,
+        use_ensemble: bool = None
     ) -> Dict:
         """
         Get ML prediction for stock with caching
@@ -246,10 +278,14 @@ class StockAnalyzer:
             symbol: Stock symbol
             df: Processed DataFrame
             force_retrain: Force model retraining
+            use_ensemble: Whether to use ensemble model (defaults to instance setting)
 
         Returns:
             Dictionary with prediction results
         """
+        # Use instance setting if not specified
+        if use_ensemble is None:
+            use_ensemble = self.use_ensemble
         features = [f for f in LSTM_FEATURES if f in df.columns]
 
         # Prepare data with proper train/val/test split
@@ -266,7 +302,7 @@ class StockAnalyzer:
 
         model_info = {'cached': False, 'trained': False}
 
-        if self.use_ensemble:
+        if use_ensemble and HAS_XGBOOST:
             # Use ensemble model
             if symbol not in self.ensemble_models:
                 self.ensemble_models[symbol] = EnsemblePredictor(input_size=len(features))
@@ -345,6 +381,49 @@ class StockAnalyzer:
                 'confidence': confidence,
                 'model_info': model_info
             }
+
+    def _get_chronos_prediction(self, df) -> Dict:
+        """
+        Get Chronos-2 prediction for stock
+
+        Args:
+            df: Processed DataFrame with OHLCV data
+
+        Returns:
+            Dictionary with prediction results including confidence intervals
+        """
+        if not HAS_CHRONOS:
+            raise ImportError(
+                "Chronos not installed. Install with: pip install chronos-forecasting"
+            )
+
+        # Initialize Chronos predictor if needed
+        if self._chronos_predictor is None:
+            self._chronos_predictor = ChronosPredictor(
+                model_name=CHRONOS_CONFIG.get("model_name", "amazon/chronos-t5-small"),
+                prediction_length=CHRONOS_CONFIG.get("prediction_length", 5),
+                context_length=CHRONOS_CONFIG.get("context_length", 60),
+                quantile_levels=CHRONOS_CONFIG.get("quantile_levels", [0.1, 0.5, 0.9]),
+                device=CHRONOS_CONFIG.get("device", "cpu")
+            )
+
+        # Get prediction
+        direction, confidence, details = self._chronos_predictor.predict_direction(df)
+
+        model_info = {
+            "model": "chronos",
+            "model_name": CHRONOS_CONFIG.get("model_name"),
+            "prediction_length": CHRONOS_CONFIG.get("prediction_length"),
+            "cached": self._chronos_predictor.is_loaded
+        }
+
+        return {
+            'direction': direction,
+            'confidence': confidence,
+            'model_info': model_info,
+            'price_range': details.get('price_range'),
+            'forecast_path': details.get('forecast_path')
+        }
 
     def run_backtest(
         self,
@@ -503,6 +582,87 @@ class StockAnalyzer:
             self.model_cache.clear()
             self.ensemble_models.clear()
             print("Cleared all model caches")
+
+    def set_model_type(self, model_type: str) -> Dict:
+        """
+        Set the active model type for predictions
+
+        Args:
+            model_type: Model type ('lstm', 'ensemble', 'chronos')
+
+        Returns:
+            Dictionary with status and model info
+        """
+        available = self.get_available_models()
+        available_types = [m['type'] for m in available if m['available']]
+
+        if model_type not in MODEL_SELECTION['available_models']:
+            return {
+                'success': False,
+                'error': f"Unknown model type: {model_type}",
+                'available_models': available_types
+            }
+
+        if model_type == 'chronos' and not HAS_CHRONOS:
+            return {
+                'success': False,
+                'error': "Chronos not installed. Install with: pip install chronos-forecasting",
+                'available_models': available_types
+            }
+
+        if model_type == 'ensemble' and not HAS_XGBOOST:
+            return {
+                'success': False,
+                'error': "XGBoost not installed. Install with: pip install xgboost",
+                'available_models': available_types
+            }
+
+        self._model_type = model_type
+        self.use_ensemble = (model_type == "ensemble")
+
+        return {
+            'success': True,
+            'model_type': model_type,
+            'message': f"Model switched to {model_type}"
+        }
+
+    def get_available_models(self) -> List[Dict]:
+        """
+        Get list of available prediction models with status
+
+        Returns:
+            List of model info dictionaries
+        """
+        return [
+            {
+                'type': 'lstm',
+                'name': 'LSTM Neural Network',
+                'description': 'Deep learning model for sequence prediction',
+                'available': True,
+                'requires_training': True
+            },
+            {
+                'type': 'ensemble',
+                'name': 'Ensemble (LSTM + XGBoost)',
+                'description': 'Combined deep learning and gradient boosting',
+                'available': HAS_XGBOOST,
+                'requires_training': True,
+                'note': None if HAS_XGBOOST else 'Install xgboost: pip install xgboost'
+            },
+            {
+                'type': 'chronos',
+                'name': 'Chronos-2 Foundation Model',
+                'description': 'Amazon\'s zero-shot time series forecaster with confidence intervals',
+                'available': HAS_CHRONOS,
+                'requires_training': False,
+                'note': None if HAS_CHRONOS else 'Install chronos: pip install chronos-forecasting'
+            }
+        ]
+
+    @property
+    def current_model_type(self) -> str:
+        """Get current model type"""
+        return self._model_type
 
 
 # Import pandas for NaN checking

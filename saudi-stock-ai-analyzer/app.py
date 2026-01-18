@@ -44,7 +44,7 @@ async def root():
     """Root endpoint - API info"""
     return {
         "name": "Saudi Stock AI Analyzer API",
-        "version": "2.0.0",
+        "version": "2.1.0",
         "endpoints": {
             "stocks": "/api/stocks",
             "analyze": "/api/analyze/{symbol}",
@@ -54,7 +54,10 @@ async def root():
             "signals_history": "/api/signals/history/{symbol}",
             "compare": "/api/compare",
             "risk": "/api/risk/{symbol}",
-            "health": "/api/health"
+            "health": "/api/health",
+            "models": "/api/models",
+            "models_select": "/api/models/select",
+            "chronos": "/api/chronos/{symbol}"
         }
     }
 
@@ -74,7 +77,8 @@ async def analyze_stock(
     symbol: str,
     period: str = Query(default="6mo", description="Data period (1mo, 3mo, 6mo, 1y, 2y)"),
     train_model: bool = Query(default=True, description="Whether to train ML model"),
-    force_retrain: bool = Query(default=False, description="Force model retraining")
+    force_retrain: bool = Query(default=False, description="Force model retraining"),
+    model_type: str = Query(default=None, description="Model type (lstm, ensemble, chronos)")
 ):
     """
     Perform complete analysis on a stock
@@ -83,13 +87,15 @@ async def analyze_stock(
     - **period**: Historical data period
     - **train_model**: Whether to include ML prediction
     - **force_retrain**: Force model retraining even if cached
+    - **model_type**: Override model type (lstm, ensemble, chronos)
     """
     try:
         result = analyzer.analyze_stock(
             symbol,
             period=period,
             train_model=train_model,
-            force_retrain=force_retrain
+            force_retrain=force_retrain,
+            model_type=model_type
         )
 
         if 'error' in result:
@@ -332,9 +338,133 @@ async def health_check():
             "ensemble_model": analyzer.use_ensemble,
             "model_caching": True,
             "backtesting": True,
-            "risk_metrics": True
+            "risk_metrics": True,
+            "chronos_available": hasattr(analyzer, '_chronos_predictor')
         }
     }
+
+
+# ==================== Model Selection Endpoints ====================
+
+@app.get("/api/models")
+async def get_available_models():
+    """
+    List available prediction models with status
+
+    Returns list of models including:
+    - Type (lstm, ensemble, chronos)
+    - Availability status
+    - Description
+    - Installation notes if unavailable
+    """
+    models = analyzer.get_available_models()
+    current = analyzer.current_model_type
+
+    return {
+        "current_model": current,
+        "models": models
+    }
+
+
+@app.post("/api/models/select")
+async def select_model(
+    model_type: str = Query(description="Model type to select (lstm, ensemble, chronos)")
+):
+    """
+    Switch to a different prediction model
+
+    - **model_type**: Target model (lstm, ensemble, chronos)
+
+    Returns success status and available models if the switch fails
+    """
+    result = analyzer.set_model_type(model_type)
+
+    if not result.get('success'):
+        raise HTTPException(
+            status_code=400,
+            detail=result.get('error', 'Failed to switch model')
+        )
+
+    return result
+
+
+@app.get("/api/chronos/{symbol}")
+async def get_chronos_forecast(
+    symbol: str,
+    horizon: int = Query(default=5, description="Forecast horizon in days (1-30)"),
+    period: str = Query(default="6mo", description="Historical data period for context")
+):
+    """
+    Get Chronos-2 forecast with confidence intervals
+
+    - **symbol**: Stock symbol (e.g., 2222 for Aramco)
+    - **horizon**: Number of days to forecast (default 5, max 30)
+    - **period**: Historical data period for model context
+
+    Returns:
+    - Predicted direction (UP/DOWN/NEUTRAL)
+    - Confidence score
+    - Predicted price with confidence intervals (10th, 50th, 90th percentiles)
+    - Forecast path with daily predictions
+
+    Note: First prediction may be slow due to model download (~500MB)
+    """
+    from models.chronos_model import HAS_CHRONOS, ChronosPredictor
+    from utils.config import CHRONOS_CONFIG
+
+    if not HAS_CHRONOS:
+        raise HTTPException(
+            status_code=503,
+            detail="Chronos not installed. Install with: pip install chronos-forecasting"
+        )
+
+    # Validate horizon
+    horizon = max(1, min(horizon, 30))
+
+    try:
+        # Fetch and process data
+        raw_data = analyzer.loader.fetch_stock_data(symbol, period=period)
+        if raw_data is None or raw_data.empty:
+            raise HTTPException(status_code=404, detail=f"No data found for symbol {symbol}")
+
+        clean_data = analyzer.preprocessor.clean_data(raw_data)
+        processed_data = analyzer.preprocessor.add_technical_indicators(clean_data)
+
+        # Create Chronos predictor with custom horizon
+        predictor = ChronosPredictor(
+            model_name=CHRONOS_CONFIG.get("model_name", "amazon/chronos-t5-small"),
+            prediction_length=horizon,
+            context_length=CHRONOS_CONFIG.get("context_length", 60),
+            quantile_levels=CHRONOS_CONFIG.get("quantile_levels", [0.1, 0.5, 0.9]),
+            device=CHRONOS_CONFIG.get("device", "cpu")
+        )
+
+        # Get prediction
+        direction, confidence, details = predictor.predict_direction(processed_data)
+
+        # Get stock info
+        stock_info = analyzer._get_stock_info(symbol)
+
+        return {
+            "symbol": symbol,
+            "name": stock_info.get('name', symbol),
+            "direction": direction,
+            "confidence": round(confidence * 100, 1),
+            "predicted_price": details.get('predicted_price'),
+            "price_range": details.get('price_range'),
+            "horizon_days": horizon,
+            "forecast_path": details.get('forecast_path'),
+            "current_price": details.get('current_price'),
+            "model": {
+                "name": "Chronos-2",
+                "type": CHRONOS_CONFIG.get("model_name")
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ==================== Static Files (for built React app) ====================
@@ -364,7 +494,7 @@ if __name__ == "__main__":
     import uvicorn
 
     print("=" * 60)
-    print("Saudi Stock AI Analyzer - API Server v2.0")
+    print("Saudi Stock AI Analyzer - API Server v2.1")
     print("=" * 60)
     print(f"\nStarting server on http://{API_CONFIG['host']}:{API_CONFIG['port']}")
     print("\nAvailable endpoints:")
@@ -378,6 +508,10 @@ if __name__ == "__main__":
     print("  GET  /api/risk/{symbol}       - Risk metrics")
     print("  POST /api/cache/clear         - Clear model cache")
     print("  GET  /api/health              - Health check")
+    print("\n  Model Selection (Chronos-2 support):")
+    print("  GET  /api/models              - List available models")
+    print("  POST /api/models/select       - Switch prediction model")
+    print("  GET  /api/chronos/{symbol}    - Direct Chronos forecast")
     print("\nPress Ctrl+C to stop the server")
     print("=" * 60)
 
