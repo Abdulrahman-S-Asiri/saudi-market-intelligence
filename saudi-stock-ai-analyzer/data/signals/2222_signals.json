@@ -471,5 +471,27 @@
       "macd": 0.22108704020365977,
       "regime": "uptrend"
     }
+  },
+  {
+    "timestamp": "2026-01-21T13:47:23.876323",
+    "signal": "HOLD",
+    "confidence": 40.0,
+    "price": 24.989999771118164,
+    "indicators": {
+      "rsi": 71.26437453595169,
+      "macd": 0.24191059301649886,
+      "regime": "sideways"
+    }
+  },
+  {
+    "timestamp": "2026-01-21T13:47:24.896914",
+    "signal": "HOLD",
+    "confidence": 40.0,
+    "price": 24.989999771118164,
+    "indicators": {
+      "rsi": 71.26437453595169,
+      "macd": 0.24191059287225158,
+      "regime": "sideways"
+    }
   }
 ]

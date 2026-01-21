@@ -19,7 +19,7 @@ from fastapi.responses import FileResponse
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from main import StockAnalyzer
-from utils.config import API_CONFIG, SAUDI_STOCKS
+from utils.config import API_CONFIG, SAUDI_STOCKS, SECTORS
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -52,6 +52,8 @@ async def root():
         "model": "Advanced LSTM (BiLSTM + Multi-Head Attention)",
         "endpoints": {
             "stocks": "/api/stocks",
+            "sectors": "/api/sectors",
+            "stocks_by_sector": "/api/stocks/sector/{sector}",
             "analyze": "/api/analyze/{symbol}",
             "chart": "/api/chart/{symbol}",
             "predict": "/api/predict/{symbol}",
@@ -72,6 +74,42 @@ async def get_stocks():
     return {
         "count": len(stocks),
         "stocks": stocks
+    }
+
+
+@app.get("/api/sectors")
+async def get_sectors():
+    """Get all available sectors with their stocks"""
+    return {
+        "count": len(SECTORS),
+        "sectors": SECTORS
+    }
+
+
+@app.get("/api/stocks/sector/{sector}")
+async def get_stocks_by_sector(sector: str):
+    """Get stocks filtered by sector"""
+    # Find matching sector (case-insensitive)
+    matching_sector = None
+    for s in SECTORS.keys():
+        if s.lower() == sector.lower() or s.lower().replace(" ", "-") == sector.lower():
+            matching_sector = s
+            break
+
+    if not matching_sector:
+        raise HTTPException(status_code=404, detail=f"Sector '{sector}' not found")
+
+    sector_stocks = SECTORS[matching_sector]
+    stocks_info = {
+        symbol: SAUDI_STOCKS.get(symbol, {"name": "Unknown", "sector": matching_sector})
+        for symbol in sector_stocks
+        if symbol in SAUDI_STOCKS
+    }
+
+    return {
+        "sector": matching_sector,
+        "count": len(stocks_info),
+        "stocks": stocks_info
     }
 
 

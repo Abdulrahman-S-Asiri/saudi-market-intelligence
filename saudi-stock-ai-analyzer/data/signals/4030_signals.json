@@ -9,5 +9,16 @@
       "macd": -0.34095556612955136,
       "regime": "downtrend"
     }
+  },
+  {
+    "timestamp": "2026-01-21T13:48:47.288723",
+    "signal": "HOLD",
+    "confidence": 49.9,
+    "price": 30.1200008392334,
+    "indicators": {
+      "rsi": 54.4991559417459,
+      "macd": 0.09441716477181572,
+      "regime": "strong_uptrend"
+    }
   }
 ]

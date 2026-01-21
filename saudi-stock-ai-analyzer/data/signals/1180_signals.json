@@ -31,5 +31,16 @@
       "macd": 1.1121221262119718,
       "regime": "sideways"
     }
+  },
+  {
+    "timestamp": "2026-01-21T13:48:45.572999",
+    "signal": "HOLD",
+    "confidence": 43.4,
+    "price": 41.939998626708984,
+    "indicators": {
+      "rsi": 73.20572350565178,
+      "macd": 1.211482469640714,
+      "regime": "sideways"
+    }
   }
 ]
