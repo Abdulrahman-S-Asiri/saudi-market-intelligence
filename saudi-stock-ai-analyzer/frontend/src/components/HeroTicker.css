@@ -1,0 +1,262 @@
+/**
+ * HeroTicker Styles
+ * Premium animated price display with neon effects
+ */
+
+.hero-ticker {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--space-8) var(--space-4);
+  text-align: center;
+  overflow: hidden;
+}
+
+/* Background Glow */
+.hero-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 400px;
+  height: 400px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  filter: blur(100px);
+  opacity: 0.3;
+  pointer-events: none;
+  transition: background-color var(--duration-slow);
+}
+
+.hero-glow-buy {
+  background: var(--signal-buy);
+}
+
+.hero-glow-sell {
+  background: var(--signal-sell);
+}
+
+.hero-glow-neutral {
+  background: var(--accent-cyan);
+}
+
+/* Stock Info */
+.hero-stock-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.hero-symbol {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  background: var(--gradient-mixed);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hero-name {
+  font-size: var(--text-base);
+  color: var(--text-muted);
+}
+
+/* Price Container */
+.hero-price-container {
+  position: relative;
+  margin-bottom: var(--space-6);
+}
+
+/* Price Display */
+.hero-price {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  transition: transform var(--duration-fast);
+}
+
+.hero-price.flash-up {
+  animation: priceUp 0.5s var(--ease-out);
+}
+
+.hero-price.flash-down {
+  animation: priceDown 0.5s var(--ease-out);
+}
+
+.price-currency {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-medium);
+  color: var(--text-muted);
+}
+
+.price-value {
+  font-size: var(--text-6xl);
+  font-weight: var(--font-bold);
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  letter-spacing: var(--tracking-tight);
+  text-shadow: 0 0 40px rgba(255, 255, 255, 0.1);
+}
+
+@media (min-width: 768px) {
+  .price-value {
+    font-size: var(--text-7xl);
+  }
+}
+
+/* Price Skeleton */
+.hero-price-skeleton {
+  width: 300px;
+  height: 72px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-lg);
+  animation: shimmer 1.5s infinite;
+}
+
+/* Change Display */
+.hero-change {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  font-size: var(--text-xl);
+  font-family: var(--font-mono);
+}
+
+.hero-change.positive {
+  color: var(--signal-buy);
+}
+
+.hero-change.negative {
+  color: var(--signal-sell);
+}
+
+.hero-change.neutral {
+  color: var(--text-muted);
+}
+
+.change-icon {
+  font-size: var(--text-sm);
+}
+
+.change-percent {
+  color: var(--text-muted);
+  font-size: var(--text-base);
+}
+
+/* Signal Badge */
+.hero-signal {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-6);
+  border-radius: var(--radius-full);
+  font-weight: var(--font-semibold);
+  overflow: hidden;
+}
+
+.hero-signal.signal-buy {
+  background: var(--signal-buy-subtle);
+  color: var(--signal-buy);
+  box-shadow: var(--glow-buy);
+}
+
+.hero-signal.signal-sell {
+  background: var(--signal-sell-subtle);
+  color: var(--signal-sell);
+  box-shadow: var(--glow-sell);
+}
+
+.hero-signal.signal-neutral {
+  background: var(--signal-neutral-subtle);
+  color: var(--signal-neutral);
+  box-shadow: var(--glow-neutral);
+}
+
+.signal-pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  animation: signalPulse 2s var(--ease-in-out) infinite;
+  opacity: 0.3;
+}
+
+.signal-buy .signal-pulse {
+  background: var(--signal-buy);
+}
+
+.signal-sell .signal-pulse {
+  background: var(--signal-sell);
+}
+
+.signal-neutral .signal-pulse {
+  background: var(--signal-neutral);
+}
+
+.signal-label {
+  position: relative;
+  font-size: var(--text-lg);
+  letter-spacing: var(--tracking-wide);
+}
+
+.signal-confidence {
+  position: relative;
+  font-size: var(--text-sm);
+  opacity: 0.8;
+  font-family: var(--font-mono);
+}
+
+/* Live Indicator */
+.hero-live-indicator {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  background: var(--bg-elevated);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-subtle);
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--signal-buy);
+  border-radius: 50%;
+  animation: pulse 2s var(--ease-in-out) infinite;
+}
+
+.live-text {
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--text-muted);
+  letter-spacing: var(--tracking-wider);
+}
+
+/* Price Particles */
+.price-particle {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  left: 50%;
+  top: 50%;
+  pointer-events: none;
+}
+
+.price-particle.positive {
+  background: var(--signal-buy);
+  box-shadow: 0 0 10px var(--signal-buy-glow);
+}
+
+.price-particle.negative {
+  background: var(--signal-sell);
+  box-shadow: 0 0 10px var(--signal-sell-glow);
+}

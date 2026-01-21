@@ -11,10 +11,8 @@ const useStockData = () => {
   const [backtestResults, setBacktestResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [availableModels, setAvailableModels] = useState([]);
-  const [currentModel, setCurrentModel] = useState('ensemble');
 
-  // Fetch available stocks and models on mount
+  // Fetch available stocks on mount
   useEffect(() => {
     const fetchStocks = async () => {
       try {
@@ -36,35 +34,16 @@ const useStockData = () => {
       }
     };
 
-    const fetchModels = async () => {
-      try {
-        const response = await axios.get(`${API_BASE}/api/models`);
-        setAvailableModels(response.data.models || []);
-        setCurrentModel(response.data.current_model || 'ensemble');
-      } catch (err) {
-        console.error('Failed to fetch models:', err);
-        // Set default models if API fails
-        setAvailableModels([
-          { type: 'lstm', name: 'LSTM Neural Network', available: true },
-          { type: 'ensemble', name: 'Ensemble (LSTM + XGBoost)', available: true },
-          { type: 'chronos', name: 'Chronos-2 Foundation Model', available: false },
-        ]);
-      }
-    };
-
     fetchStocks();
-    fetchModels();
   }, []);
 
-  const fetchAnalysis = useCallback(async (symbol, period = '6mo', modelType = null) => {
+  // Fetch analysis - Always uses Advanced LSTM (no model_type param needed)
+  const fetchAnalysis = useCallback(async (symbol, period = '6mo') => {
     setLoading(true);
     setError(null);
 
     try {
       const params = { period, train_model: true };
-      if (modelType) {
-        params.model_type = modelType;
-      }
       const response = await axios.get(`${API_BASE}/api/analyze/${symbol}`, { params });
       setAnalysis(response.data);
     } catch (err) {
@@ -136,61 +115,19 @@ const useStockData = () => {
     }
   }, []);
 
-  const selectModel = useCallback(async (modelType) => {
-    try {
-      const response = await axios.post(`${API_BASE}/api/models/select`, null, {
-        params: { model_type: modelType }
-      });
-      if (response.data.success) {
-        setCurrentModel(modelType);
-        return { success: true, message: response.data.message };
-      }
-      return { success: false, error: response.data.error };
-    } catch (err) {
-      console.error('Model selection failed:', err);
-      return {
-        success: false,
-        error: err.response?.data?.detail || err.message
-      };
-    }
-  }, []);
-
-  const fetchChronosForecast = useCallback(async (symbol, horizon = 5, period = '6mo') => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const response = await axios.get(`${API_BASE}/api/chronos/${symbol}`, {
-        params: { horizon, period }
-      });
-      return response.data;
-    } catch (err) {
-      const errorMsg = err.response?.data?.detail || err.message;
-      setError(errorMsg);
-      console.error('Chronos forecast failed:', err);
-      return { error: errorMsg };
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   return {
     analysis,
     chartData,
     stocks,
     signalHistory,
-    backtestResults,
+    backtest: backtestResults,
     loading,
     error,
-    availableModels,
-    currentModel,
     fetchAnalysis,
     fetchChartData,
     fetchSignalHistory,
     fetchBacktest,
-    compareStocks,
-    selectModel,
-    fetchChronosForecast
+    compareStocks
   };
 };
 

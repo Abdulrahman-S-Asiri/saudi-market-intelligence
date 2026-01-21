@@ -1,6 +1,6 @@
 """
 Configuration settings and constants for Saudi Stock AI Analyzer
-Version 2.0 - Enhanced with ensemble models, backtesting, and risk metrics
+Version 3.0 - Advanced LSTM Edition (BiLSTM + Multi-Head Attention)
 """
 
 import os
@@ -60,99 +60,109 @@ RSI_OVERBOUGHT = 75
 # MACD Thresholds (for histogram)
 MACD_THRESHOLD = 0.0
 
-# LSTM Model Configuration
-LSTM_CONFIG = {
-    "sequence_length": 60,      # Number of days to look back
-    "hidden_size": 64,          # LSTM hidden layer size (first layer)
-    "hidden_size_2": 128,       # Second LSTM layer size
-    "hidden_size_3": 64,        # Third LSTM layer size
-    "num_layers": 3,            # Number of LSTM layers
-    "dropout": 0.3,             # Dropout rate
-    "learning_rate": 0.001,     # Initial learning rate
-    "batch_size": 32,           # Training batch size
-    "epochs": 150,              # Maximum training epochs (increased from 100)
-    "patience": 15,             # Early stopping patience (increased from 10)
-    "train_split": 0.7,         # Training data split
-    "val_split": 0.15,          # Validation data split
-    "test_split": 0.15,         # Test data split
-    "use_attention": True,      # Use attention mechanism
-    "bidirectional": False,     # Use bidirectional LSTM
-    "lr_scheduler_factor": 0.5, # LR reduction factor
-    "lr_scheduler_patience": 5, # LR scheduler patience
-    "use_walk_forward": True,   # Use walk-forward validation
-    "walk_forward_periods": 5,  # Number of walk-forward periods
+# ============================================================================
+# ADVANCED LSTM CONFIGURATION - High Accuracy Model
+# ============================================================================
+# Target Metrics: >75% Directional Accuracy, >70% Win Rate, >1.5 Sharpe Ratio
+ADVANCED_LSTM_CONFIG = {
+    # Architecture
+    "hidden_sizes": [128, 256, 128],    # BiLSTM hidden sizes per layer
+    "num_attention_heads": 4,            # Multi-head attention heads
+    "attention_dim": 64,                 # Dimension per attention head
+    "bidirectional": True,               # Use bidirectional LSTM
+    "use_residual": True,                # Residual connections between layers
+    "use_layer_norm": True,              # Layer normalization
+    "use_attention": True,               # Multi-head attention mechanism
+
+    # Regularization
+    "dropout": 0.2,                      # Dropout rate (lower than basic LSTM)
+    "label_smoothing": 0.1,              # Label smoothing factor
+    "weight_decay": 0.01,                # L2 regularization
+
+    # Training
+    "learning_rate": 0.0005,             # Initial learning rate
+    "batch_size": 32,                    # Training batch size
+    "epochs": 200,                       # Maximum training epochs
+    "patience": 20,                      # Early stopping patience
+    "lr_scheduler": "cosine_warm_restarts",  # LR scheduler type
+    "lr_scheduler_T0": 10,               # Initial restart period
+    "lr_scheduler_Tmult": 2,             # Period multiplier
+
+    # Data
+    "sequence_length": 60,               # Lookback window (60 trading days)
+    "train_split": 0.7,                  # Training data ratio
+    "val_split": 0.15,                   # Validation data ratio
+    "test_split": 0.15,                  # Test data ratio
+
+    # Augmentation
+    "use_mixup": True,                   # Mixup data augmentation
+    "mixup_alpha": 0.2,                  # Mixup alpha parameter
+    "use_cutmix": False,                 # CutMix augmentation
+
+    # Ensemble
+    "n_ensemble_models": 5,              # Number of models in ensemble
+    "ensemble_seeds": [42, 142, 242, 342, 442],  # Random seeds for diversity
+    "ensemble_aggregation": "mean",      # Aggregation method
+
+    # Uncertainty
+    "output_uncertainty": True,          # Output uncertainty estimates
+    "mc_dropout_samples": 100,           # MC Dropout samples for inference
+
+    # Validation
+    "use_purged_cv": True,               # Purged walk-forward CV
+    "cv_purge_days": 5,                  # Days to purge between train/test
+    "cv_embargo_days": 5,                # Days to embargo after test
+    "cv_n_splits": 5,                    # Number of CV splits
 }
 
-# Features for LSTM model (expanded to 20+ features for better predictions)
-LSTM_FEATURES = [
-    "Close",
-    "Volume",
-    "High",
-    "Low",
-    "SMA_20",
-    "SMA_50",
-    "EMA_12",
-    "EMA_26",
-    "RSI",
-    "MACD",
-    "MACD_Signal",
-    "MACD_Histogram",
-    "ATR",
-    "OBV",
-    "Stochastic_K",
-    "Williams_R",
-    "ADX",
-    "BB_Width",
-    "ROC",
-    "Momentum",
-    "Daily_Return",
+# Advanced Features for High-Accuracy Model (35+ features)
+ADVANCED_LSTM_FEATURES = [
+    # Basic OHLCV
+    "Close", "Volume", "High", "Low",
+
+    # Moving Averages
+    "SMA_20", "SMA_50", "EMA_12", "EMA_26",
+
+    # Momentum Indicators
+    "RSI", "MACD", "MACD_Signal", "MACD_Histogram",
+
+    # Volatility
+    "ATR", "BB_Width", "Volatility", "HV_20",
+
+    # Volume Indicators
+    "OBV", "Volume_MA", "Volume_Ratio", "Relative_Volume",
+
+    # Oscillators
+    "Stoch_K", "Williams_R", "ADX", "CCI", "MFI", "Ultimate_Osc",
+
+    # Microstructure
+    "Volume_Momentum", "Price_Volume_Corr", "Amihud_Illiquidity", "Volume_Volatility",
+
+    # Channels
+    "Keltner_Position", "Donchian_Position",
+
+    # Pattern Features
+    "Gap_Percentage", "Body_Ratio", "Dist_From_20d_High", "Dist_From_20d_Low",
+
+    # Statistical
+    "Price_Zscore", "Price_Percentile", "Return_Skewness", "Vol_Regime",
+
+    # Trend
+    "ROC", "Momentum", "Daily_Return", "Choppiness", "TRIX",
+
+    # Cross-Asset
+    "Rolling_Beta", "Rolling_Alpha",
 ]
 
-# Extended features (optional - for ensemble model)
-EXTENDED_FEATURES = [
-    "Close",
-    "Volume",
-    "High",
-    "Low",
-    "SMA_20",
-    "SMA_50",
-    "RSI",
-    "MACD",
-    "MACD_Signal",
-    "ATR",
-    "OBV",
-    "Stochastic_K",
-    "Williams_R",
-    "ADX",
-    "ROC",
-    "Daily_Return",
-]
-
-# Ensemble Model Configuration
-ENSEMBLE_CONFIG = {
-    "lstm_weight": 0.6,         # Initial LSTM weight
-    "xgb_weight": 0.4,          # Initial XGBoost weight
-    "use_dynamic_weights": True, # Adjust weights based on performance
-    "xgb_n_estimators": 200,    # XGBoost trees
-    "xgb_max_depth": 6,         # XGBoost max depth
-    "xgb_learning_rate": 0.05,  # XGBoost learning rate
-}
-
-# Chronos-2 Model Configuration
-CHRONOS_CONFIG = {
-    "model_name": "amazon/chronos-t5-small",  # Options: -small, -base, -large
-    "prediction_length": 5,        # Days to forecast
-    "context_length": 60,          # Historical days to use as context
-    "quantile_levels": [0.1, 0.5, 0.9],  # Quantiles for confidence intervals
-    "device": "cpu",               # Device for inference (cpu or cuda)
-    "num_samples": 20,             # Samples for uncertainty estimation
-}
-
-# Model Selection Configuration
-MODEL_SELECTION = {
-    "default_model": "ensemble",   # Options: 'lstm', 'ensemble', 'chronos'
-    "available_models": ["lstm", "ensemble", "chronos"],
-    "fallback_model": "lstm",      # Fallback when selected model unavailable
+# Advanced Backtest Configuration
+ADVANCED_BACKTEST_CONFIG = {
+    "n_monte_carlo_simulations": 100,    # MC simulation count
+    "slippage_range": [0.0005, 0.002],   # Min/max slippage
+    "commission_range": [0.0005, 0.001], # Min/max commission
+    "execution_delay_range": [0, 2],     # Min/max delay in bars
+    "use_bootstrap": True,               # Block bootstrap for path variation
+    "bootstrap_block_size": 10,          # Bootstrap block size
+    "min_confidence_for_trade": 0.6,     # Minimum model confidence
 }
 
 # Trading Strategy Configuration

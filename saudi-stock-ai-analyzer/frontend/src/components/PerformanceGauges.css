@@ -1,0 +1,167 @@
+/**
+ * PerformanceGauges Styles
+ */
+
+.performance-gauges {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-5);
+}
+
+.gauges-header {
+  margin-bottom: var(--space-5);
+}
+
+.gauges-title {
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+}
+
+.gauges-subtitle {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.gauges-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-4);
+}
+
+@media (max-width: 768px) {
+  .gauges-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.gauge-wrapper {
+  display: flex;
+  justify-content: center;
+}
+
+.gauge-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gauge-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.gauge-bg {
+  fill: none;
+  stroke: var(--bg-elevated, #12121a);
+}
+
+.gauge-progress {
+  fill: none;
+  filter: drop-shadow(0 0 6px currentColor);
+}
+
+.gauge-excellent {
+  stroke: var(--signal-buy, #22c55e);
+}
+
+.gauge-good {
+  stroke: var(--accent-cyan, #00f5ff);
+}
+
+.gauge-warning {
+  stroke: var(--signal-neutral, #fbbf24);
+}
+
+.gauge-poor {
+  stroke: var(--signal-sell, #ef4444);
+}
+
+.gauge-content {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  width: 70%;
+  pointer-events: none;
+}
+
+.gauge-value {
+  font-size: 16px;
+  font-weight: 700;
+  font-family: var(--font-mono, 'SF Mono', monospace);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.gauge-value-excellent {
+  color: var(--signal-buy, #22c55e);
+}
+
+.gauge-value-good {
+  color: var(--accent-cyan, #00f5ff);
+}
+
+.gauge-value-warning {
+  color: var(--signal-neutral, #fbbf24);
+}
+
+.gauge-value-poor {
+  color: var(--signal-sell, #ef4444);
+}
+
+.gauge-unit {
+  font-size: 12px;
+  opacity: 0.7;
+  margin-left: 2px;
+}
+
+.gauge-label {
+  font-size: 9px;
+  color: var(--text-muted, #64748b);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 4px;
+  line-height: 1.2;
+  max-width: 100%;
+  word-wrap: break-word;
+}
+
+.gauges-summary {
+  display: flex;
+  justify-content: space-around;
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--divider);
+}
+
+.summary-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.summary-label {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.summary-value {
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+}

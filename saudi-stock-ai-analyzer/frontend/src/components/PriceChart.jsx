@@ -14,8 +14,14 @@ const PriceChart = ({ data, loading, timeframe, onTimeframeChange }) => {
   useEffect(() => {
     if (!chartContainerRef.current || !data || data.length === 0) return;
 
+    // Get container dimensions
+    const containerWidth = chartContainerRef.current.clientWidth || chartContainerRef.current.offsetWidth || 800;
+    const containerHeight = 400;
+
     // Create chart
     const chart = createChart(chartContainerRef.current, {
+      width: containerWidth,
+      height: containerHeight,
       layout: {
         background: { type: ColorType.Solid, color: 'transparent' },
         textColor: '#888',
@@ -100,15 +106,20 @@ const PriceChart = ({ data, loading, timeframe, onTimeframeChange }) => {
 
     // Handle resize
     const handleResize = () => {
-      if (chartContainerRef.current) {
+      if (chartContainerRef.current && chart) {
+        const newWidth = chartContainerRef.current.clientWidth || chartContainerRef.current.offsetWidth || 800;
         chart.applyOptions({
-          width: chartContainerRef.current.clientWidth,
+          width: newWidth,
+          height: 400,
         });
+        chart.timeScale().fitContent();
       }
     };
 
     window.addEventListener('resize', handleResize);
-    handleResize();
+
+    // Initial resize after a short delay to ensure container is rendered
+    setTimeout(handleResize, 100);
 
     return () => {
       window.removeEventListener('resize', handleResize);
@@ -249,7 +260,7 @@ const PriceChart = ({ data, loading, timeframe, onTimeframeChange }) => {
       <div
         ref={chartContainerRef}
         className="chart-canvas"
-        style={{ height: '400px' }}
+        style={{ height: '400px', width: '100%', minWidth: '300px' }}
       />
       <div className="chart-legend">
         <div className="legend-item">

@@ -1,0 +1,361 @@
+/**
+ * TASI Analyzer - 2026 Ultra Dark Design System
+ *
+ * A modern, sophisticated dark theme with neon accents,
+ * glass morphism, and smooth animations.
+ */
+
+:root {
+  /* ========================================
+     COLOR PALETTE - Deep Blacks
+     ======================================== */
+
+  /* Primary Backgrounds */
+  --bg-void: #010104;          /* Deepest black - page background */
+  --bg-primary: #050508;       /* Primary surface */
+  --bg-secondary: #0a0a0f;     /* Secondary surface */
+  --bg-card: #0d0d14;          /* Card backgrounds */
+  --bg-elevated: #12121a;      /* Elevated elements (modals, dropdowns) */
+  --bg-hover: #181822;         /* Hover states */
+  --bg-active: #1e1e2a;        /* Active/pressed states */
+
+  /* ========================================
+     ACCENT COLORS - Neon Glow Palette
+     ======================================== */
+
+  /* Primary Accent - Cyan */
+  --accent-cyan: #00f5ff;
+  --accent-cyan-dim: #00c4cc;
+  --accent-cyan-glow: rgba(0, 245, 255, 0.3);
+  --accent-cyan-subtle: rgba(0, 245, 255, 0.1);
+
+  /* Secondary Accent - Purple */
+  --accent-purple: #a855f7;
+  --accent-purple-dim: #8b44cc;
+  --accent-purple-glow: rgba(168, 85, 247, 0.3);
+  --accent-purple-subtle: rgba(168, 85, 247, 0.1);
+
+  /* Signal Colors */
+  --signal-buy: #22c55e;
+  --signal-buy-dim: #16a34a;
+  --signal-buy-glow: rgba(34, 197, 94, 0.3);
+  --signal-buy-subtle: rgba(34, 197, 94, 0.1);
+
+  --signal-sell: #ef4444;
+  --signal-sell-dim: #dc2626;
+  --signal-sell-glow: rgba(239, 68, 68, 0.3);
+  --signal-sell-subtle: rgba(239, 68, 68, 0.1);
+
+  --signal-neutral: #f59e0b;
+  --signal-neutral-dim: #d97706;
+  --signal-neutral-glow: rgba(245, 158, 11, 0.3);
+  --signal-neutral-subtle: rgba(245, 158, 11, 0.1);
+
+  /* ========================================
+     TEXT COLORS
+     ======================================== */
+
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --text-muted: rgba(255, 255, 255, 0.5);
+  --text-disabled: rgba(255, 255, 255, 0.3);
+  --text-inverse: #050508;
+
+  /* ========================================
+     BORDERS & DIVIDERS
+     ======================================== */
+
+  --border-subtle: rgba(255, 255, 255, 0.05);
+  --border-default: rgba(255, 255, 255, 0.1);
+  --border-hover: rgba(255, 255, 255, 0.15);
+  --border-focus: var(--accent-cyan);
+  --divider: rgba(255, 255, 255, 0.06);
+
+  /* ========================================
+     GLASS MORPHISM
+     ======================================== */
+
+  --glass-bg: rgba(13, 13, 20, 0.8);
+  --glass-bg-light: rgba(13, 13, 20, 0.6);
+  --glass-bg-heavy: rgba(13, 13, 20, 0.95);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-blur: blur(20px);
+  --glass-blur-heavy: blur(40px);
+
+  /* ========================================
+     GLOW EFFECTS
+     ======================================== */
+
+  --glow-cyan: 0 0 20px rgba(0, 245, 255, 0.3);
+  --glow-cyan-strong: 0 0 40px rgba(0, 245, 255, 0.4);
+  --glow-purple: 0 0 20px rgba(168, 85, 247, 0.3);
+  --glow-purple-strong: 0 0 40px rgba(168, 85, 247, 0.4);
+  --glow-buy: 0 0 20px rgba(34, 197, 94, 0.3);
+  --glow-sell: 0 0 20px rgba(239, 68, 68, 0.3);
+  --glow-neutral: 0 0 20px rgba(245, 158, 11, 0.3);
+
+  /* Inner glow for cards */
+  --inner-glow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+
+  /* ========================================
+     SHADOWS
+     ======================================== */
+
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.6);
+  --shadow-2xl: 0 24px 64px rgba(0, 0, 0, 0.7);
+
+  /* Colored shadows */
+  --shadow-cyan: 0 4px 20px rgba(0, 245, 255, 0.15);
+  --shadow-purple: 0 4px 20px rgba(168, 85, 247, 0.15);
+
+  /* ========================================
+     GRADIENTS
+     ======================================== */
+
+  /* Mesh gradient background */
+  --gradient-mesh: radial-gradient(ellipse at 20% 0%, rgba(0, 245, 255, 0.08) 0%, transparent 50%),
+                   radial-gradient(ellipse at 80% 0%, rgba(168, 85, 247, 0.08) 0%, transparent 50%),
+                   radial-gradient(ellipse at 50% 100%, rgba(0, 245, 255, 0.05) 0%, transparent 50%);
+
+  /* Card gradients */
+  --gradient-card: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0) 100%);
+  --gradient-card-hover: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%);
+
+  /* Accent gradients */
+  --gradient-cyan: linear-gradient(135deg, var(--accent-cyan) 0%, #00c4cc 100%);
+  --gradient-purple: linear-gradient(135deg, var(--accent-purple) 0%, #8b44cc 100%);
+  --gradient-buy: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  --gradient-sell: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  --gradient-mixed: linear-gradient(135deg, var(--accent-cyan) 0%, var(--accent-purple) 100%);
+
+  /* Border gradients */
+  --gradient-border: linear-gradient(135deg, rgba(0, 245, 255, 0.3) 0%, rgba(168, 85, 247, 0.3) 100%);
+
+  /* ========================================
+     TYPOGRAPHY
+     ======================================== */
+
+  /* Font Families */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', Consolas, monospace;
+  --font-display: 'Space Grotesk', var(--font-sans);
+
+  /* Font Sizes */
+  --text-xs: 0.75rem;      /* 12px */
+  --text-sm: 0.875rem;     /* 14px */
+  --text-base: 1rem;       /* 16px */
+  --text-lg: 1.125rem;     /* 18px */
+  --text-xl: 1.25rem;      /* 20px */
+  --text-2xl: 1.5rem;      /* 24px */
+  --text-3xl: 1.875rem;    /* 30px */
+  --text-4xl: 2.25rem;     /* 36px */
+  --text-5xl: 3rem;        /* 48px */
+  --text-6xl: 3.75rem;     /* 60px */
+  --text-7xl: 4.5rem;      /* 72px */
+
+  /* Font Weights */
+  --font-thin: 100;
+  --font-light: 300;
+  --font-normal: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+  --font-bold: 700;
+  --font-extrabold: 800;
+
+  /* Line Heights */
+  --leading-none: 1;
+  --leading-tight: 1.25;
+  --leading-snug: 1.375;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.625;
+
+  /* Letter Spacing */
+  --tracking-tighter: -0.05em;
+  --tracking-tight: -0.025em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.025em;
+  --tracking-wider: 0.05em;
+  --tracking-widest: 0.1em;
+
+  /* ========================================
+     SPACING
+     ======================================== */
+
+  --space-0: 0;
+  --space-1: 0.25rem;      /* 4px */
+  --space-2: 0.5rem;       /* 8px */
+  --space-3: 0.75rem;      /* 12px */
+  --space-4: 1rem;         /* 16px */
+  --space-5: 1.25rem;      /* 20px */
+  --space-6: 1.5rem;       /* 24px */
+  --space-8: 2rem;         /* 32px */
+  --space-10: 2.5rem;      /* 40px */
+  --space-12: 3rem;        /* 48px */
+  --space-16: 4rem;        /* 64px */
+  --space-20: 5rem;        /* 80px */
+  --space-24: 6rem;        /* 96px */
+
+  /* ========================================
+     BORDER RADIUS
+     ======================================== */
+
+  --radius-none: 0;
+  --radius-sm: 0.25rem;    /* 4px */
+  --radius-md: 0.5rem;     /* 8px */
+  --radius-lg: 0.75rem;    /* 12px */
+  --radius-xl: 1rem;       /* 16px */
+  --radius-2xl: 1.5rem;    /* 24px */
+  --radius-3xl: 2rem;      /* 32px */
+  --radius-full: 9999px;
+
+  /* ========================================
+     TRANSITIONS
+     ======================================== */
+
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 400ms;
+  --duration-slower: 600ms;
+
+  --ease-linear: linear;
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+
+  /* ========================================
+     Z-INDEX LAYERS
+     ======================================== */
+
+  --z-base: 0;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-fixed: 300;
+  --z-modal-backdrop: 400;
+  --z-modal: 500;
+  --z-popover: 600;
+  --z-tooltip: 700;
+  --z-notification: 800;
+  --z-max: 9999;
+
+  /* ========================================
+     LAYOUT
+     ======================================== */
+
+  --sidebar-width: 280px;
+  --sidebar-collapsed: 80px;
+  --header-height: 64px;
+  --container-max: 1440px;
+  --chart-height: 400px;
+  --card-min-height: 120px;
+
+  /* ========================================
+     CHART COLORS
+     ======================================== */
+
+  --chart-bg: var(--bg-card);
+  --chart-grid: rgba(255, 255, 255, 0.05);
+  --chart-axis: rgba(255, 255, 255, 0.3);
+  --chart-candle-up: var(--signal-buy);
+  --chart-candle-down: var(--signal-sell);
+  --chart-volume: rgba(0, 245, 255, 0.3);
+  --chart-line-1: var(--accent-cyan);
+  --chart-line-2: var(--accent-purple);
+  --chart-line-3: var(--signal-neutral);
+  --chart-area-fill: rgba(0, 245, 255, 0.1);
+
+  /* ========================================
+     SCROLLBAR
+     ======================================== */
+
+  --scrollbar-width: 8px;
+  --scrollbar-track: var(--bg-secondary);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.15);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.25);
+}
+
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
+
+/* Glass Card */
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--inner-glow), var(--shadow-lg);
+}
+
+/* Glow Border */
+.glow-border-cyan {
+  position: relative;
+}
+.glow-border-cyan::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  background: var(--gradient-border);
+  border-radius: inherit;
+  z-index: -1;
+  opacity: 0.5;
+  filter: blur(8px);
+}
+
+/* Neon Text */
+.neon-text-cyan {
+  color: var(--accent-cyan);
+  text-shadow: 0 0 10px var(--accent-cyan-glow);
+}
+
+.neon-text-purple {
+  color: var(--accent-purple);
+  text-shadow: 0 0 10px var(--accent-purple-glow);
+}
+
+/* Signal Colors */
+.signal-buy { color: var(--signal-buy); }
+.signal-sell { color: var(--signal-sell); }
+.signal-neutral { color: var(--signal-neutral); }
+
+.signal-bg-buy { background: var(--signal-buy-subtle); }
+.signal-bg-sell { background: var(--signal-sell-subtle); }
+.signal-bg-neutral { background: var(--signal-neutral-subtle); }
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: var(--scrollbar-width);
+  height: var(--scrollbar-width);
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: var(--radius-full);
+  transition: background var(--duration-fast);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* Selection */
+::selection {
+  background: var(--accent-cyan-subtle);
+  color: var(--text-primary);
+}
+
+/* Focus Ring */
+:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
+}

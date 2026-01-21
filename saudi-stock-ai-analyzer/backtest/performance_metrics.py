@@ -81,8 +81,12 @@ class PerformanceMetrics:
 
     def calculate_total_return(self, df: pd.DataFrame) -> float:
         """Calculate total return over the period"""
+        if len(df) < 1:
+            return 0.0
         start_price = float(df['Close'].iloc[0])
         end_price = float(df['Close'].iloc[-1])
+        if start_price == 0:
+            return 0.0
         return ((end_price - start_price) / start_price) * 100
 
     def calculate_annualized_return(self, df: pd.DataFrame) -> float:
@@ -180,7 +184,20 @@ class PerformanceMetrics:
         Returns:
             PerformanceReport object
         """
+        if len(df) < 2:
+            return PerformanceReport(
+                total_return=0, annualized_return=0, volatility=0,
+                sharpe_ratio=0, max_drawdown=0, win_rate=0,
+                avg_daily_return=0, best_day=0, worst_day=0, trading_days=len(df)
+            )
         returns = self.calculate_returns(df)
+
+        if len(returns) < 1:
+            return PerformanceReport(
+                total_return=0, annualized_return=0, volatility=0,
+                sharpe_ratio=0, max_drawdown=0, win_rate=0,
+                avg_daily_return=0, best_day=0, worst_day=0, trading_days=len(df)
+            )
 
         return PerformanceReport(
             total_return=self.calculate_total_return(df),
@@ -242,6 +259,8 @@ class RiskMetrics:
         Uses downside deviation instead of standard deviation
         Better for measuring risk-adjusted returns with asymmetric distributions
         """
+        if len(df) < 2:
+            return 0.0
         returns = self.calculate_returns(df)
 
         # Annualized return
@@ -269,6 +288,8 @@ class RiskMetrics:
         Annualized return divided by maximum drawdown
         Good for assessing performance relative to drawdown risk
         """
+        if len(df) < 2:
+            return 0.0
         # Annualized return
         total_return = (df['Close'].iloc[-1] / df['Close'].iloc[0]) - 1
         years = len(df) / 252
@@ -453,6 +474,13 @@ class RiskMetrics:
         Returns:
             RiskReport object with all risk metrics
         """
+        if len(df) < 2:
+            return RiskReport(
+                volatility=0, max_drawdown=0, max_drawdown_duration=0,
+                sharpe_ratio=0, sortino_ratio=0, calmar_ratio=0,
+                var_95=0, var_99=0, cvar_95=0, beta=0,
+                alpha=0, information_ratio=0, skewness=0, kurtosis=0
+            )
         returns = self.calculate_returns(df)
 
         # Calculate volatility
@@ -549,6 +577,9 @@ def calculate_period_returns(df: pd.DataFrame) -> Dict:
     Returns:
         Dictionary with period returns
     """
+    if len(df) < 1:
+        return {'current_price': 0, 'return_1d': None, 'return_5d': None,
+                'return_1m': None, 'return_3m': None, 'return_6m': None, 'return_1y': None}
     current_price = float(df['Close'].iloc[-1])
     results = {'current_price': current_price}
 

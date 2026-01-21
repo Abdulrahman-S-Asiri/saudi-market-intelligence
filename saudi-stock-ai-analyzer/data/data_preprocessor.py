@@ -2,19 +2,28 @@
 Data preprocessing and cleaning module for Saudi Stock AI Analyzer
 Includes technical indicators calculation and LSTM data preparation
 FIXED: Data leakage issue - scaler now fits only on training data
+
+Enhanced with 35+ features for high-accuracy LSTM model:
+- Market Microstructure: Volume_Momentum, Price_Volume_Correlation, Amihud_Illiquidity
+- Advanced Indicators: Keltner Channels, Donchian Channels, CCI, MFI, CMF, TRIX
+- Pattern Features: Higher_High, Lower_Low, Inside_Bar, Gap_Percentage
+- Cross-Asset: TASI_Index_Return, Relative_Strength_vs_TASI
 """
 
 import pandas as pd
 import numpy as np
 from typing import Tuple, List, Optional, Dict, Any
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import MinMaxScaler, RobustScaler
 import joblib
 import os
+import warnings
+
+warnings.filterwarnings('ignore')
 
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.config import INDICATORS, LSTM_CONFIG
+from utils.config import INDICATORS, ADVANCED_LSTM_CONFIG
 
 
 class DataPreprocessor:
@@ -300,6 +309,384 @@ class DataPreprocessor:
             'senkou_b': senkou_b
         }
 
+    # ========================================================================
+    # ADVANCED FEATURES FOR HIGH-ACCURACY LSTM MODEL
+    # ========================================================================
+
+    def add_advanced_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Add advanced features for high-accuracy LSTM model.
+
+        This method adds 15+ new features including:
+        - Market Microstructure indicators
+        - Advanced technical indicators
+        - Price pattern features
+        - Cross-asset features
+
+        Args:
+            df: DataFrame with basic technical indicators already added
+
+        Returns:
+            DataFrame with advanced features added (~35 total features)
+        """
+        df = df.copy()
+
+        # ===== MARKET MICROSTRUCTURE FEATURES =====
+        df = self._add_microstructure_features(df)
+
+        # ===== ADVANCED TECHNICAL INDICATORS =====
+        df = self._add_advanced_indicators(df)
+
+        # ===== PRICE PATTERN FEATURES =====
+        df = self._add_pattern_features(df)
+
+        # ===== CROSS-ASSET / RELATIVE FEATURES =====
+        df = self._add_cross_asset_features(df)
+
+        # ===== STATISTICAL FEATURES =====
+        df = self._add_statistical_features(df)
+
+        # Fill NaN with forward fill then backward fill
+        df = df.ffill().bfill()
+
+        return df
+
+    def _add_microstructure_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Add market microstructure features.
+
+        These features capture market liquidity and trading activity patterns
+        that are often predictive of short-term price movements.
+        """
+        # Volume Momentum (rate of change in volume)
+        df['Volume_Momentum'] = df['Volume'].pct_change(5).fillna(0)
+
+        # Price-Volume Correlation (rolling 20-day)
+        df['Price_Volume_Corr'] = (
+            df['Close'].rolling(window=20)
+            .corr(df['Volume'])
+            .fillna(0)
+        )
+
+        # Amihud Illiquidity Ratio (absolute return / dollar volume)
+        # Higher values indicate less liquid stocks
+        dollar_volume = df['Close'] * df['Volume']
+        df['Amihud_Illiquidity'] = (
+            (df['Close'].pct_change().abs() / (dollar_volume + 1))
+            .rolling(window=20).mean()
+            .fillna(0)
+        )
+        # Normalize to reasonable range
+        df['Amihud_Illiquidity'] = df['Amihud_Illiquidity'] * 1e9
+
+        # Volume Volatility (rolling std of volume)
+        df['Volume_Volatility'] = (
+            df['Volume'].rolling(window=20).std() /
+            df['Volume'].rolling(window=20).mean()
+        ).fillna(0)
+
+        # Relative Volume (current vs average)
+        df['Relative_Volume'] = (
+            df['Volume'] / df['Volume'].rolling(window=20).mean()
+        ).fillna(1)
+
+        # Price Impact (price change per unit volume)
+        df['Price_Impact'] = (
+            df['Close'].pct_change().abs() /
+            (df['Volume'].pct_change().abs() + 0.001)
+        ).rolling(window=10).mean().fillna(0)
+
+        # Clip extreme values
+        df['Price_Impact'] = df['Price_Impact'].clip(-10, 10)
+
+        return df
+
+    def _add_advanced_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Add advanced technical indicators.
+
+        These indicators provide additional perspectives on price trends,
+        momentum, and volatility beyond the basic indicators.
+        """
+        # ===== KELTNER CHANNELS =====
+        typical_price = (df['High'] + df['Low'] + df['Close']) / 3
+        ema_20 = typical_price.ewm(span=20, adjust=False).mean()
+        atr = self._calculate_atr(df, period=10)
+
+        df['Keltner_Upper'] = ema_20 + (atr * 2)
+        df['Keltner_Lower'] = ema_20 - (atr * 2)
+        df['Keltner_Width'] = (df['Keltner_Upper'] - df['Keltner_Lower']) / ema_20
+        df['Keltner_Position'] = (df['Close'] - df['Keltner_Lower']) / (df['Keltner_Upper'] - df['Keltner_Lower'] + 0.001)
+
+        # ===== DONCHIAN CHANNELS =====
+        df['Donchian_High'] = df['High'].rolling(window=20).max()
+        df['Donchian_Low'] = df['Low'].rolling(window=20).min()
+        df['Donchian_Mid'] = (df['Donchian_High'] + df['Donchian_Low']) / 2
+        df['Donchian_Position'] = (df['Close'] - df['Donchian_Low']) / (df['Donchian_High'] - df['Donchian_Low'] + 0.001)
+
+        # ===== CCI (Commodity Channel Index) =====
+        tp = (df['High'] + df['Low'] + df['Close']) / 3
+        sma_tp = tp.rolling(window=20).mean()
+        mad = tp.rolling(window=20).apply(lambda x: np.abs(x - x.mean()).mean(), raw=True)
+        df['CCI'] = (tp - sma_tp) / (0.015 * mad + 0.001)
+        df['CCI'] = df['CCI'].clip(-300, 300)  # Clip extreme values
+
+        # ===== MFI (Money Flow Index) =====
+        df['MFI'] = self._calculate_mfi(df, period=14)
+
+        # ===== CMF (Chaikin Money Flow) =====
+        df['CMF'] = self._calculate_cmf(df, period=20)
+
+        # ===== FORCE INDEX =====
+        df['Force_Index'] = df['Close'].diff() * df['Volume']
+        df['Force_Index_EMA'] = df['Force_Index'].ewm(span=13, adjust=False).mean()
+        # Normalize
+        df['Force_Index_Norm'] = (
+            df['Force_Index_EMA'] /
+            df['Force_Index_EMA'].rolling(window=50).std()
+        ).clip(-5, 5).fillna(0)
+
+        # ===== TRIX (Triple Exponential Average) =====
+        df['TRIX'] = self._calculate_trix(df['Close'], period=15)
+
+        # ===== ULTIMATE OSCILLATOR =====
+        df['Ultimate_Osc'] = self._calculate_ultimate_oscillator(df)
+
+        # ===== CHOPPINESS INDEX (market trending vs ranging) =====
+        df['Choppiness'] = self._calculate_choppiness(df, period=14)
+
+        return df
+
+    def _calculate_mfi(self, df: pd.DataFrame, period: int = 14) -> pd.Series:
+        """Calculate Money Flow Index"""
+        typical_price = (df['High'] + df['Low'] + df['Close']) / 3
+        money_flow = typical_price * df['Volume']
+
+        # Get positive and negative money flow
+        tp_diff = typical_price.diff()
+        positive_flow = money_flow.where(tp_diff > 0, 0)
+        negative_flow = money_flow.where(tp_diff < 0, 0)
+
+        positive_mf = positive_flow.rolling(window=period).sum()
+        negative_mf = negative_flow.rolling(window=period).sum()
+
+        mfi = 100 - (100 / (1 + positive_mf / (negative_mf + 1)))
+        return mfi.fillna(50)
+
+    def _calculate_cmf(self, df: pd.DataFrame, period: int = 20) -> pd.Series:
+        """Calculate Chaikin Money Flow"""
+        mfv = ((df['Close'] - df['Low']) - (df['High'] - df['Close'])) / (df['High'] - df['Low'] + 0.001) * df['Volume']
+        cmf = mfv.rolling(window=period).sum() / df['Volume'].rolling(window=period).sum()
+        return cmf.fillna(0)
+
+    def _calculate_trix(self, prices: pd.Series, period: int = 15) -> pd.Series:
+        """Calculate TRIX (Triple Exponential Average)"""
+        ema1 = prices.ewm(span=period, adjust=False).mean()
+        ema2 = ema1.ewm(span=period, adjust=False).mean()
+        ema3 = ema2.ewm(span=period, adjust=False).mean()
+        trix = ema3.pct_change() * 100
+        return trix.fillna(0)
+
+    def _calculate_ultimate_oscillator(
+        self,
+        df: pd.DataFrame,
+        period1: int = 7,
+        period2: int = 14,
+        period3: int = 28
+    ) -> pd.Series:
+        """Calculate Ultimate Oscillator"""
+        bp = df['Close'] - pd.concat([df['Low'], df['Close'].shift(1)], axis=1).min(axis=1)
+        tr = pd.concat([
+            df['High'] - df['Low'],
+            (df['High'] - df['Close'].shift(1)).abs(),
+            (df['Low'] - df['Close'].shift(1)).abs()
+        ], axis=1).max(axis=1)
+
+        avg1 = bp.rolling(period1).sum() / tr.rolling(period1).sum()
+        avg2 = bp.rolling(period2).sum() / tr.rolling(period2).sum()
+        avg3 = bp.rolling(period3).sum() / tr.rolling(period3).sum()
+
+        uo = 100 * ((4 * avg1) + (2 * avg2) + avg3) / 7
+        return uo.fillna(50)
+
+    def _calculate_choppiness(self, df: pd.DataFrame, period: int = 14) -> pd.Series:
+        """
+        Calculate Choppiness Index.
+        High values (>61.8) indicate ranging/choppy market.
+        Low values (<38.2) indicate trending market.
+        """
+        atr_sum = self._calculate_atr(df, period=1).rolling(window=period).sum()
+        high_max = df['High'].rolling(window=period).max()
+        low_min = df['Low'].rolling(window=period).min()
+
+        choppiness = 100 * np.log10(atr_sum / (high_max - low_min + 0.001)) / np.log10(period)
+        return choppiness.clip(0, 100).fillna(50)
+
+    def _add_pattern_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Add price pattern features.
+
+        These features help identify chart patterns and candlestick formations
+        that may precede significant price movements.
+        """
+        # Higher High (current high > previous high)
+        df['Higher_High'] = (df['High'] > df['High'].shift(1)).astype(int)
+
+        # Lower Low (current low < previous low)
+        df['Lower_Low'] = (df['Low'] < df['Low'].shift(1)).astype(int)
+
+        # Inside Bar (high lower than prev, low higher than prev)
+        df['Inside_Bar'] = (
+            (df['High'] < df['High'].shift(1)) &
+            (df['Low'] > df['Low'].shift(1))
+        ).astype(int)
+
+        # Outside Bar (high higher than prev, low lower than prev)
+        df['Outside_Bar'] = (
+            (df['High'] > df['High'].shift(1)) &
+            (df['Low'] < df['Low'].shift(1))
+        ).astype(int)
+
+        # Gap Percentage (gap from previous close)
+        df['Gap_Percentage'] = ((df['Open'] - df['Close'].shift(1)) / df['Close'].shift(1) * 100).fillna(0)
+        df['Gap_Percentage'] = df['Gap_Percentage'].clip(-10, 10)
+
+        # Gap Up / Gap Down flags
+        df['Gap_Up'] = (df['Open'] > df['High'].shift(1)).astype(int)
+        df['Gap_Down'] = (df['Open'] < df['Low'].shift(1)).astype(int)
+
+        # Candle Body Size (relative to range)
+        candle_range = df['High'] - df['Low']
+        candle_body = (df['Close'] - df['Open']).abs()
+        df['Body_Ratio'] = (candle_body / (candle_range + 0.001)).clip(0, 1)
+
+        # Upper Shadow Ratio
+        upper_shadow = df['High'] - pd.concat([df['Close'], df['Open']], axis=1).max(axis=1)
+        df['Upper_Shadow_Ratio'] = (upper_shadow / (candle_range + 0.001)).clip(0, 1)
+
+        # Lower Shadow Ratio
+        lower_shadow = pd.concat([df['Close'], df['Open']], axis=1).min(axis=1) - df['Low']
+        df['Lower_Shadow_Ratio'] = (lower_shadow / (candle_range + 0.001)).clip(0, 1)
+
+        # Consecutive Up/Down days
+        df['Up_Day'] = (df['Close'] > df['Close'].shift(1)).astype(int)
+        df['Consecutive_Up'] = df['Up_Day'].groupby((df['Up_Day'] != df['Up_Day'].shift()).cumsum()).cumsum()
+        df['Consecutive_Down'] = (1 - df['Up_Day']).groupby(((1 - df['Up_Day']) != (1 - df['Up_Day']).shift()).cumsum()).cumsum()
+
+        # Distance from recent high/low
+        df['Dist_From_20d_High'] = (df['Close'] - df['High'].rolling(20).max()) / df['Close']
+        df['Dist_From_20d_Low'] = (df['Close'] - df['Low'].rolling(20).min()) / df['Close']
+
+        return df
+
+    def _add_cross_asset_features(self, df: pd.DataFrame, tasi_data: pd.DataFrame = None) -> pd.DataFrame:
+        """
+        Add cross-asset and relative strength features.
+
+        These features capture how the stock performs relative to the broader
+        market (TASI index) and its sector.
+        """
+        # If TASI data is provided, calculate relative strength
+        if tasi_data is not None and 'Close' in tasi_data.columns:
+            # Align TASI data with stock data
+            tasi_aligned = tasi_data['Close'].reindex(df.index, method='ffill')
+            df['TASI_Return'] = tasi_aligned.pct_change().fillna(0)
+            df['Relative_Strength_vs_TASI'] = (
+                df['Daily_Return'] - df['TASI_Return']
+            ).fillna(0)
+            df['RS_Cumulative'] = (1 + df['Relative_Strength_vs_TASI']).cumprod() - 1
+        else:
+            # Use placeholder features (will be calculated later if TASI data available)
+            df['TASI_Return'] = 0
+            df['Relative_Strength_vs_TASI'] = 0
+            df['RS_Cumulative'] = 0
+
+        # Beta (20-day rolling) - volatility relative to self
+        returns = df['Close'].pct_change().fillna(0)
+        df['Rolling_Beta'] = returns.rolling(window=20).std() / returns.std()
+        df['Rolling_Beta'] = df['Rolling_Beta'].fillna(1)
+
+        # Alpha (excess return over expected)
+        expected_return = returns.rolling(window=20).mean()
+        df['Rolling_Alpha'] = returns - expected_return
+        df['Rolling_Alpha'] = df['Rolling_Alpha'].fillna(0)
+
+        return df
+
+    def _add_statistical_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Add statistical features for better model performance.
+
+        These features capture distributional characteristics of returns
+        that may be predictive of future volatility and direction.
+        """
+        returns = df['Close'].pct_change().fillna(0)
+
+        # Skewness (20-day rolling)
+        df['Return_Skewness'] = returns.rolling(window=20).skew().fillna(0)
+
+        # Kurtosis (20-day rolling)
+        df['Return_Kurtosis'] = returns.rolling(window=20).kurt().fillna(0)
+        df['Return_Kurtosis'] = df['Return_Kurtosis'].clip(-10, 10)
+
+        # Z-score of current price vs 20-day mean
+        rolling_mean = df['Close'].rolling(window=20).mean()
+        rolling_std = df['Close'].rolling(window=20).std()
+        df['Price_Zscore'] = ((df['Close'] - rolling_mean) / (rolling_std + 0.001)).clip(-3, 3).fillna(0)
+
+        # Percentile rank of current close in 50-day range
+        df['Price_Percentile'] = df['Close'].rolling(window=50).apply(
+            lambda x: (x[-1] - x.min()) / (x.max() - x.min() + 0.001) if len(x) > 0 else 0.5,
+            raw=True
+        ).fillna(0.5)
+
+        # Historical Volatility (annualized)
+        df['HV_20'] = returns.rolling(window=20).std() * np.sqrt(252)
+        df['HV_20'] = df['HV_20'].fillna(df['HV_20'].mean())
+
+        # Volatility Regime (current vol vs average)
+        avg_vol = df['HV_20'].rolling(window=60).mean()
+        df['Vol_Regime'] = (df['HV_20'] / (avg_vol + 0.001)).clip(0.5, 3).fillna(1)
+
+        # Average True Range Percentage
+        df['ATR_Percent'] = (df['ATR'] / df['Close'] * 100).fillna(0)
+
+        return df
+
+    def get_advanced_feature_list(self) -> List[str]:
+        """
+        Get the list of all features for advanced LSTM model.
+
+        Returns:
+            List of 35+ feature names
+        """
+        return [
+            # Basic OHLCV
+            'Close', 'Volume', 'High', 'Low',
+            # Moving Averages
+            'SMA_20', 'SMA_50', 'EMA_12', 'EMA_26',
+            # Momentum Indicators
+            'RSI', 'MACD', 'MACD_Signal', 'MACD_Histogram',
+            # Volatility
+            'ATR', 'BB_Width', 'Volatility', 'HV_20',
+            # Volume Indicators
+            'OBV', 'Volume_MA', 'Volume_Ratio', 'Relative_Volume',
+            # Oscillators
+            'Stoch_K', 'Williams_R', 'ADX', 'CCI', 'MFI', 'Ultimate_Osc',
+            # Microstructure
+            'Volume_Momentum', 'Price_Volume_Corr', 'Amihud_Illiquidity', 'Volume_Volatility',
+            # Channels
+            'Keltner_Position', 'Donchian_Position',
+            # Pattern Features
+            'Gap_Percentage', 'Body_Ratio', 'Dist_From_20d_High', 'Dist_From_20d_Low',
+            # Statistical
+            'Price_Zscore', 'Price_Percentile', 'Return_Skewness', 'Vol_Regime',
+            # Trend
+            'ROC', 'Momentum', 'Daily_Return', 'Choppiness', 'TRIX',
+            # Cross-Asset
+            'Rolling_Beta', 'Rolling_Alpha'
+        ]
+
     def prepare_lstm_data(
         self,
         df: pd.DataFrame,
@@ -325,9 +712,9 @@ class DataPreprocessor:
         if features is None:
             features = ['Close', 'Volume', 'SMA_20', 'SMA_50', 'RSI', 'MACD', 'ATR', 'OBV']
         if sequence_length is None:
-            sequence_length = LSTM_CONFIG['sequence_length']
+            sequence_length = ADVANCED_LSTM_CONFIG['sequence_length']
         if train_split is None:
-            train_split = LSTM_CONFIG['train_split']
+            train_split = ADVANCED_LSTM_CONFIG['train_split']
 
         # Filter available features
         available_features = [f for f in features if f in df.columns]
@@ -404,9 +791,9 @@ class DataPreprocessor:
             Dictionary with X_train, X_val, X_test, y_train, y_val, y_test, scaler
         """
         if train_split is None:
-            train_split = LSTM_CONFIG.get('train_split', 0.7)
+            train_split = ADVANCED_LSTM_CONFIG.get('train_split', 0.7)
         if val_split is None:
-            val_split = LSTM_CONFIG.get('val_split', 0.15)
+            val_split = ADVANCED_LSTM_CONFIG.get('val_split', 0.15)
 
         X_train, X_val, X_test, y_train, y_val, y_test, scaler = self.prepare_lstm_data(
             df,
@@ -446,7 +833,7 @@ class DataPreprocessor:
         if features is None:
             features = ['Close', 'Volume', 'SMA_20', 'SMA_50', 'RSI', 'MACD', 'ATR', 'OBV']
         if sequence_length is None:
-            sequence_length = LSTM_CONFIG['sequence_length']
+            sequence_length = ADVANCED_LSTM_CONFIG['sequence_length']
 
         available_features = [f for f in features if f in df.columns]
         data = df[available_features].tail(sequence_length).values
@@ -476,12 +863,13 @@ class DataPreprocessor:
         return False
 
 
-def preprocess_stock_data(df: pd.DataFrame) -> pd.DataFrame:
+def preprocess_stock_data(df: pd.DataFrame, include_advanced: bool = True) -> pd.DataFrame:
     """
     Convenience function to preprocess stock data
 
     Args:
         df: Raw stock DataFrame
+        include_advanced: Whether to include advanced features (35+ features)
 
     Returns:
         Preprocessed DataFrame with technical indicators
@@ -489,7 +877,46 @@ def preprocess_stock_data(df: pd.DataFrame) -> pd.DataFrame:
     preprocessor = DataPreprocessor()
     df = preprocessor.clean_data(df)
     df = preprocessor.add_technical_indicators(df)
+
+    if include_advanced:
+        df = preprocessor.add_advanced_features(df)
+
     return df
+
+
+def preprocess_for_advanced_lstm(
+    df: pd.DataFrame,
+    tasi_data: pd.DataFrame = None
+) -> Tuple[pd.DataFrame, DataPreprocessor]:
+    """
+    Preprocess stock data specifically for the Advanced LSTM model.
+
+    This function applies all preprocessing steps including advanced features
+    optimized for the high-accuracy AdvancedStockLSTM model.
+
+    Args:
+        df: Raw stock DataFrame
+        tasi_data: Optional TASI index data for relative strength features
+
+    Returns:
+        Tuple of (preprocessed DataFrame, DataPreprocessor instance)
+    """
+    preprocessor = DataPreprocessor()
+
+    # Clean data
+    df = preprocessor.clean_data(df)
+
+    # Add basic technical indicators
+    df = preprocessor.add_technical_indicators(df)
+
+    # Add advanced features
+    df = preprocessor.add_advanced_features(df)
+
+    # Add cross-asset features if TASI data provided
+    if tasi_data is not None:
+        df = preprocessor._add_cross_asset_features(df, tasi_data)
+
+    return df, preprocessor
 
 
 if __name__ == "__main__":

@@ -1,0 +1,41 @@
+{
+  "last_updated": "2026-01-19T14:28:04.198580",
+  "total_experiments": 2,
+  "target_win_rate": 80.0,
+  "experiments": [
+    {
+      "experiment_id": "exp_20260119_142750_0",
+      "timestamp": "2026-01-19T14:27:50.500042",
+      "symbol": "UNKNOWN",
+      "win_rate": 0.0,
+      "total_trades": 2,
+      "profit_factor": 0.0,
+      "sharpe_ratio": -10.87,
+      "total_return": -0.48,
+      "max_drawdown": 0.48,
+      "parameters": {
+        "min_confidence": 60.0,
+        "hold_period": 5,
+        "use_stop_loss": true
+      },
+      "notes": ""
+    },
+    {
+      "experiment_id": "exp_20260119_142804_1",
+      "timestamp": "2026-01-19T14:28:04.198561",
+      "symbol": "UNKNOWN",
+      "win_rate": 0.0,
+      "total_trades": 2,
+      "profit_factor": 0.0,
+      "sharpe_ratio": -10.87,
+      "total_return": -0.48,
+      "max_drawdown": 0.48,
+      "parameters": {
+        "min_confidence": 60.0,
+        "hold_period": 5,
+        "use_stop_loss": true
+      },
+      "notes": ""
+    }
+  ]
+}

@@ -1,0 +1,571 @@
+/**
+ * TASI Analyzer - Responsive Design System
+ *
+ * Mobile-first responsive styles with breakpoints for
+ * all device sizes. Includes touch optimizations.
+ */
+
+/* ============================================
+   BREAKPOINTS
+   ============================================
+
+   xs: 0 - 479px     (Mobile S)
+   sm: 480 - 639px   (Mobile L)
+   md: 640 - 767px   (Tablet Portrait)
+   lg: 768 - 1023px  (Tablet Landscape)
+   xl: 1024 - 1279px (Desktop)
+   2xl: 1280+        (Desktop L)
+
+   ============================================ */
+
+/* ============================================
+   BASE - MOBILE FIRST (< 480px)
+   ============================================ */
+
+/* Layout */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding: var(--space-3);
+}
+
+.main-content {
+  flex: 1;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+/* Sidebar - Hidden on mobile, bottom nav instead */
+.sidebar {
+  display: none;
+}
+
+/* Mobile Bottom Navigation */
+.mobile-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 64px;
+  background: var(--glass-bg-heavy);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-top: 1px solid var(--glass-border);
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: 0 var(--space-2);
+  z-index: var(--z-sticky);
+}
+
+.mobile-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  color: var(--text-muted);
+  transition: color var(--duration-fast);
+}
+
+.mobile-nav-item.active {
+  color: var(--accent-cyan);
+}
+
+.mobile-nav-icon {
+  font-size: 1.25rem;
+}
+
+.mobile-nav-label {
+  font-size: var(--text-xs);
+}
+
+/* Header */
+.header {
+  position: sticky;
+  top: 0;
+  height: var(--header-height);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-bottom: 1px solid var(--glass-border);
+  z-index: var(--z-sticky);
+  padding: 0 var(--space-3);
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 100%;
+}
+
+.header-logo {
+  font-size: var(--text-lg);
+  font-weight: var(--font-bold);
+}
+
+.header-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* Hero Section */
+.hero-ticker {
+  padding: var(--space-4) 0;
+  text-align: center;
+}
+
+.hero-price {
+  font-size: var(--text-4xl);
+  font-weight: var(--font-bold);
+  font-family: var(--font-mono);
+}
+
+.hero-change {
+  font-size: var(--text-lg);
+  margin-top: var(--space-2);
+}
+
+/* Cards */
+.card {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-3);
+}
+
+.card-title {
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+}
+
+/* Grid */
+.grid-responsive {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: 1fr;
+}
+
+/* Charts */
+.chart-container {
+  width: 100%;
+  height: 250px;
+  min-height: 200px;
+}
+
+/* Tables */
+.table-responsive {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-responsive table {
+  min-width: 500px;
+}
+
+/* Buttons */
+.btn {
+  min-height: 44px; /* Touch-friendly */
+  padding: var(--space-3) var(--space-4);
+}
+
+.btn-icon {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* Forms */
+.form-input {
+  min-height: 44px;
+  font-size: 16px; /* Prevents iOS zoom */
+}
+
+/* Signal Panel */
+.signal-panel {
+  padding: var(--space-4);
+}
+
+.signal-indicator {
+  width: 80px;
+  height: 80px;
+}
+
+/* Hide on Mobile */
+.hide-mobile {
+  display: none;
+}
+
+/* Content padding for bottom nav */
+.main-content {
+  padding-bottom: 80px; /* Space for mobile nav */
+}
+
+/* ============================================
+   SMALL MOBILE (480px - 639px)
+   ============================================ */
+
+@media (min-width: 480px) {
+  .hero-price {
+    font-size: var(--text-5xl);
+  }
+
+  .grid-responsive {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .chart-container {
+    height: 300px;
+  }
+
+  .card {
+    padding: var(--space-5);
+  }
+}
+
+/* ============================================
+   TABLET PORTRAIT (640px - 767px)
+   ============================================ */
+
+@media (min-width: 640px) {
+  .app-container {
+    padding: var(--space-4);
+  }
+
+  .hero-ticker {
+    padding: var(--space-6) 0;
+  }
+
+  .hero-price {
+    font-size: var(--text-6xl);
+  }
+
+  .grid-responsive {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-5);
+  }
+
+  .chart-container {
+    height: 350px;
+  }
+
+  .signal-indicator {
+    width: 100px;
+    height: 100px;
+  }
+}
+
+/* ============================================
+   TABLET LANDSCAPE (768px - 1023px)
+   ============================================ */
+
+@media (min-width: 768px) {
+  /* Show sidebar, hide mobile nav */
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    left: 0;
+    top: var(--header-height);
+    bottom: 0;
+    width: var(--sidebar-collapsed);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    border-right: 1px solid var(--glass-border);
+    z-index: var(--z-fixed);
+    transition: width var(--duration-normal) var(--ease-out);
+  }
+
+  .sidebar:hover,
+  .sidebar.expanded {
+    width: var(--sidebar-width);
+  }
+
+  .mobile-nav {
+    display: none;
+  }
+
+  .main-content {
+    margin-left: var(--sidebar-collapsed);
+    padding-bottom: var(--space-8);
+    transition: margin-left var(--duration-normal) var(--ease-out);
+  }
+
+  .sidebar:hover ~ .main-content,
+  .sidebar.expanded ~ .main-content {
+    margin-left: var(--sidebar-width);
+  }
+
+  /* Show desktop elements */
+  .hide-mobile {
+    display: block;
+  }
+
+  .hide-tablet {
+    display: none;
+  }
+
+  .grid-responsive {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .chart-container {
+    height: var(--chart-height);
+  }
+
+  /* Header adjustments */
+  .header {
+    padding: 0 var(--space-6);
+  }
+
+  .header-logo {
+    font-size: var(--text-xl);
+  }
+
+  .hero-price {
+    font-size: var(--text-7xl);
+  }
+}
+
+/* ============================================
+   DESKTOP (1024px - 1279px)
+   ============================================ */
+
+@media (min-width: 1024px) {
+  .sidebar {
+    width: var(--sidebar-width);
+  }
+
+  .main-content {
+    margin-left: var(--sidebar-width);
+    max-width: calc(var(--container-max) - var(--sidebar-width));
+  }
+
+  .grid-responsive {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .chart-container {
+    height: 450px;
+  }
+
+  /* Two-column layout for main content */
+  .content-grid {
+    display: grid;
+    grid-template-columns: 1fr 350px;
+    gap: var(--space-6);
+  }
+
+  .content-main {
+    grid-column: 1;
+  }
+
+  .content-sidebar {
+    grid-column: 2;
+  }
+
+  .hide-tablet {
+    display: block;
+  }
+}
+
+/* ============================================
+   DESKTOP LARGE (1280px+)
+   ============================================ */
+
+@media (min-width: 1280px) {
+  .app-container {
+    padding: var(--space-6);
+  }
+
+  .main-content {
+    max-width: var(--container-max);
+    padding: 0 var(--space-8);
+  }
+
+  .grid-responsive {
+    gap: var(--space-6);
+  }
+
+  .content-grid {
+    grid-template-columns: 1fr 400px;
+    gap: var(--space-8);
+  }
+
+  .chart-container {
+    height: 500px;
+  }
+
+  /* Multi-chart layout */
+  .chart-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-4);
+  }
+
+  .chart-grid .chart-container {
+    height: 300px;
+  }
+}
+
+/* ============================================
+   ULTRA WIDE (1920px+)
+   ============================================ */
+
+@media (min-width: 1920px) {
+  :root {
+    --sidebar-width: 320px;
+    --container-max: 1600px;
+  }
+
+  .grid-responsive {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
+/* ============================================
+   TOUCH DEVICE OPTIMIZATIONS
+   ============================================ */
+
+@media (hover: none) and (pointer: coarse) {
+  /* Remove hover effects on touch devices */
+  .hover-lift:hover,
+  .hover-scale:hover,
+  .hover-glow:hover {
+    transform: none;
+    box-shadow: none;
+  }
+
+  /* Larger touch targets */
+  .btn,
+  .form-input,
+  .nav-item,
+  .tab-item {
+    min-height: 48px;
+  }
+
+  /* Disable animations that interfere with touch */
+  .hover-border-glow:hover {
+    border-color: inherit;
+    box-shadow: none;
+  }
+}
+
+/* ============================================
+   LANDSCAPE PHONE
+   ============================================ */
+
+@media (max-width: 767px) and (orientation: landscape) {
+  .hero-ticker {
+    padding: var(--space-2) 0;
+  }
+
+  .hero-price {
+    font-size: var(--text-3xl);
+  }
+
+  .chart-container {
+    height: 200px;
+  }
+
+  .mobile-nav {
+    height: 48px;
+  }
+
+  .main-content {
+    padding-bottom: 60px;
+  }
+}
+
+/* ============================================
+   HIGH DPI / RETINA
+   ============================================ */
+
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  /* Thinner borders on retina */
+  .card,
+  .glass-card {
+    border-width: 0.5px;
+  }
+}
+
+/* ============================================
+   PRINT STYLES
+   ============================================ */
+
+@media print {
+  .sidebar,
+  .mobile-nav,
+  .header-actions,
+  .btn,
+  .notification-center {
+    display: none !important;
+  }
+
+  .main-content {
+    margin: 0;
+    padding: 0;
+  }
+
+  .card {
+    break-inside: avoid;
+    border: 1px solid #ccc;
+    background: white;
+  }
+
+  .chart-container {
+    height: 300px;
+  }
+
+  * {
+    color: black !important;
+    background: white !important;
+  }
+}
+
+/* ============================================
+   SAFE AREA INSETS (Notched Phones)
+   ============================================ */
+
+@supports (padding: env(safe-area-inset-bottom)) {
+  .mobile-nav {
+    padding-bottom: env(safe-area-inset-bottom);
+    height: calc(64px + env(safe-area-inset-bottom));
+  }
+
+  .main-content {
+    padding-bottom: calc(80px + env(safe-area-inset-bottom));
+  }
+
+  .app-container {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* ============================================
+   CONTAINER QUERIES (Future-proofing)
+   ============================================ */
+
+@container (min-width: 400px) {
+  .card-responsive {
+    padding: var(--space-6);
+  }
+}
+
+@container (min-width: 600px) {
+  .card-responsive .card-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

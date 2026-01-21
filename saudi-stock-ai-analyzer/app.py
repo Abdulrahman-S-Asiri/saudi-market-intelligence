@@ -1,12 +1,16 @@
 """
 FastAPI server for Saudi Stock AI Analyzer
 Provides REST API endpoints for the React frontend
+Uses Advanced LSTM model (BiLSTM with Multi-Head Attention)
 """
 
 import sys
 import os
-from typing import Optional, List
-from fastapi import FastAPI, HTTPException, Query
+import asyncio
+import json
+from typing import Optional, List, Dict, Set
+from datetime import datetime
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -20,8 +24,8 @@ from utils.config import API_CONFIG, SAUDI_STOCKS
 # Initialize FastAPI app
 app = FastAPI(
     title="Saudi Stock AI Analyzer API",
-    description="AI-powered stock analysis for Saudi Arabian market (Tadawul)",
-    version="2.0.0"
+    description="AI-powered stock analysis for Saudi Arabian market (Tadawul) - Advanced LSTM Edition",
+    version="3.0.0"
 )
 
 # Enable CORS for React frontend
@@ -33,8 +37,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize analyzer (singleton)
-analyzer = StockAnalyzer(use_ensemble=True)
+# Initialize analyzer (singleton) - Now uses Advanced LSTM only
+analyzer = StockAnalyzer()
 
 
 # ==================== API Endpoints ====================
@@ -44,7 +48,8 @@ async def root():
     """Root endpoint - API info"""
     return {
         "name": "Saudi Stock AI Analyzer API",
-        "version": "2.1.0",
+        "version": "3.0.0",
+        "model": "Advanced LSTM (BiLSTM + Multi-Head Attention)",
         "endpoints": {
             "stocks": "/api/stocks",
             "analyze": "/api/analyze/{symbol}",
@@ -55,9 +60,7 @@ async def root():
             "compare": "/api/compare",
             "risk": "/api/risk/{symbol}",
             "health": "/api/health",
-            "models": "/api/models",
-            "models_select": "/api/models/select",
-            "chronos": "/api/chronos/{symbol}"
+            "models": "/api/models"
         }
     }
 
@@ -77,25 +80,22 @@ async def analyze_stock(
     symbol: str,
     period: str = Query(default="6mo", description="Data period (1mo, 3mo, 6mo, 1y, 2y)"),
     train_model: bool = Query(default=True, description="Whether to train ML model"),
-    force_retrain: bool = Query(default=False, description="Force model retraining"),
-    model_type: str = Query(default=None, description="Model type (lstm, ensemble, chronos)")
+    force_retrain: bool = Query(default=False, description="Force model retraining")
 ):
     """
-    Perform complete analysis on a stock
+    Perform complete analysis on a stock using Advanced LSTM model
 
     - **symbol**: Stock symbol (e.g., 2222 for Aramco)
     - **period**: Historical data period
     - **train_model**: Whether to include ML prediction
     - **force_retrain**: Force model retraining even if cached
-    - **model_type**: Override model type (lstm, ensemble, chronos)
     """
     try:
         result = analyzer.analyze_stock(
             symbol,
             period=period,
             train_model=train_model,
-            force_retrain=force_retrain,
-            model_type=model_type
+            force_retrain=force_retrain
         )
 
         if 'error' in result:
@@ -134,7 +134,7 @@ async def predict_stock(
     period: str = Query(default="1y", description="Training data period")
 ):
     """
-    Get ML prediction for a stock
+    Get ML prediction for a stock using Advanced LSTM
 
     Note: This endpoint trains the model if not cached
     """
@@ -333,29 +333,30 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "saudi-stock-ai-analyzer",
-        "version": "2.0.0",
+        "version": "3.0.0",
+        "model": {
+            "type": "advanced_lstm",
+            "name": "BiLSTM + Multi-Head Attention",
+            "description": "Bidirectional LSTM with Multi-Head Attention, Residual Connections, and Uncertainty Estimation"
+        },
         "features": {
-            "ensemble_model": analyzer.use_ensemble,
             "model_caching": True,
             "backtesting": True,
             "risk_metrics": True,
-            "chronos_available": hasattr(analyzer, '_chronos_predictor')
+            "monte_carlo_backtest": True,
+            "uncertainty_estimation": True
         }
     }
 
 
-# ==================== Model Selection Endpoints ====================
+# ==================== Model Endpoints ====================
 
 @app.get("/api/models")
 async def get_available_models():
     """
     List available prediction models with status
 
-    Returns list of models including:
-    - Type (lstm, ensemble, chronos)
-    - Availability status
-    - Description
-    - Installation notes if unavailable
+    Returns only Advanced LSTM model info (other models have been removed)
     """
     models = analyzer.get_available_models()
     current = analyzer.current_model_type
@@ -368,101 +369,265 @@ async def get_available_models():
 
 @app.post("/api/models/select")
 async def select_model(
-    model_type: str = Query(description="Model type to select (lstm, ensemble, chronos)")
+    model_type: str = Query(description="Model type (only 'advanced_lstm' is supported)")
 ):
     """
-    Switch to a different prediction model
+    Model selection endpoint (deprecated)
 
-    - **model_type**: Target model (lstm, ensemble, chronos)
-
-    Returns success status and available models if the switch fails
+    This endpoint is kept for backwards compatibility but only supports advanced_lstm.
+    All other model types have been removed from the system.
     """
-    result = analyzer.set_model_type(model_type)
-
-    if not result.get('success'):
-        raise HTTPException(
-            status_code=400,
-            detail=result.get('error', 'Failed to switch model')
-        )
-
-    return result
-
-
-@app.get("/api/chronos/{symbol}")
-async def get_chronos_forecast(
-    symbol: str,
-    horizon: int = Query(default=5, description="Forecast horizon in days (1-30)"),
-    period: str = Query(default="6mo", description="Historical data period for context")
-):
-    """
-    Get Chronos-2 forecast with confidence intervals
-
-    - **symbol**: Stock symbol (e.g., 2222 for Aramco)
-    - **horizon**: Number of days to forecast (default 5, max 30)
-    - **period**: Historical data period for model context
-
-    Returns:
-    - Predicted direction (UP/DOWN/NEUTRAL)
-    - Confidence score
-    - Predicted price with confidence intervals (10th, 50th, 90th percentiles)
-    - Forecast path with daily predictions
-
-    Note: First prediction may be slow due to model download (~500MB)
-    """
-    from models.chronos_model import HAS_CHRONOS, ChronosPredictor
-    from utils.config import CHRONOS_CONFIG
-
-    if not HAS_CHRONOS:
-        raise HTTPException(
-            status_code=503,
-            detail="Chronos not installed. Install with: pip install chronos-forecasting"
-        )
-
-    # Validate horizon
-    horizon = max(1, min(horizon, 30))
-
-    try:
-        # Fetch and process data
-        raw_data = analyzer.loader.fetch_stock_data(symbol, period=period)
-        if raw_data is None or raw_data.empty:
-            raise HTTPException(status_code=404, detail=f"No data found for symbol {symbol}")
-
-        clean_data = analyzer.preprocessor.clean_data(raw_data)
-        processed_data = analyzer.preprocessor.add_technical_indicators(clean_data)
-
-        # Create Chronos predictor with custom horizon
-        predictor = ChronosPredictor(
-            model_name=CHRONOS_CONFIG.get("model_name", "amazon/chronos-t5-small"),
-            prediction_length=horizon,
-            context_length=CHRONOS_CONFIG.get("context_length", 60),
-            quantile_levels=CHRONOS_CONFIG.get("quantile_levels", [0.1, 0.5, 0.9]),
-            device=CHRONOS_CONFIG.get("device", "cpu")
-        )
-
-        # Get prediction
-        direction, confidence, details = predictor.predict_direction(processed_data)
-
-        # Get stock info
-        stock_info = analyzer._get_stock_info(symbol)
-
+    if model_type != 'advanced_lstm':
         return {
-            "symbol": symbol,
-            "name": stock_info.get('name', symbol),
-            "direction": direction,
-            "confidence": round(confidence * 100, 1),
-            "predicted_price": details.get('predicted_price'),
-            "price_range": details.get('price_range'),
-            "horizon_days": horizon,
-            "forecast_path": details.get('forecast_path'),
-            "current_price": details.get('current_price'),
-            "model": {
-                "name": "Chronos-2",
-                "type": CHRONOS_CONFIG.get("model_name")
-            }
+            "success": False,
+            "message": f"Model '{model_type}' is not available. Only 'advanced_lstm' is supported.",
+            "available_models": ["advanced_lstm"]
         }
 
-    except HTTPException:
-        raise
+    return {
+        "success": True,
+        "model_type": "advanced_lstm",
+        "message": "Using Advanced LSTM (BiLSTM + Multi-Head Attention) model"
+    }
+
+
+# ==================== WebSocket Manager ====================
+
+class ConnectionManager:
+    """Manages WebSocket connections for real-time updates."""
+
+    def __init__(self):
+        self.active_connections: Dict[str, Set[WebSocket]] = {}  # symbol -> set of connections
+        self.connection_symbols: Dict[WebSocket, Set[str]] = {}  # connection -> set of symbols
+
+    async def connect(self, websocket: WebSocket, symbol: str = None):
+        """Accept a new WebSocket connection."""
+        await websocket.accept()
+        if websocket not in self.connection_symbols:
+            self.connection_symbols[websocket] = set()
+
+        if symbol:
+            await self.subscribe(websocket, symbol)
+
+    def disconnect(self, websocket: WebSocket):
+        """Remove a WebSocket connection."""
+        if websocket in self.connection_symbols:
+            for symbol in self.connection_symbols[websocket]:
+                if symbol in self.active_connections:
+                    self.active_connections[symbol].discard(websocket)
+            del self.connection_symbols[websocket]
+
+    async def subscribe(self, websocket: WebSocket, symbol: str):
+        """Subscribe a connection to a symbol."""
+        if symbol not in self.active_connections:
+            self.active_connections[symbol] = set()
+        self.active_connections[symbol].add(websocket)
+        self.connection_symbols[websocket].add(symbol)
+
+    async def unsubscribe(self, websocket: WebSocket, symbol: str):
+        """Unsubscribe a connection from a symbol."""
+        if symbol in self.active_connections:
+            self.active_connections[symbol].discard(websocket)
+        if websocket in self.connection_symbols:
+            self.connection_symbols[websocket].discard(symbol)
+
+    async def broadcast_to_symbol(self, symbol: str, message: dict):
+        """Broadcast a message to all connections subscribed to a symbol."""
+        if symbol in self.active_connections:
+            disconnected = []
+            for connection in self.active_connections[symbol]:
+                try:
+                    await connection.send_json(message)
+                except Exception:
+                    disconnected.append(connection)
+
+            for conn in disconnected:
+                self.disconnect(conn)
+
+    async def send_personal_message(self, websocket: WebSocket, message: dict):
+        """Send a message to a specific connection."""
+        try:
+            await websocket.send_json(message)
+        except Exception:
+            self.disconnect(websocket)
+
+
+# Initialize WebSocket manager
+ws_manager = ConnectionManager()
+
+
+# ==================== WebSocket Endpoints ====================
+
+@app.websocket("/ws/{symbol}")
+async def websocket_endpoint(websocket: WebSocket, symbol: str):
+    """
+    WebSocket endpoint for real-time stock updates.
+
+    Sends:
+    - price_update: Real-time price changes
+    - analysis_update: Full analysis updates
+    - signal_alert: Trading signal alerts
+    """
+    await ws_manager.connect(websocket, symbol)
+
+    try:
+        # Send initial data
+        try:
+            result = analyzer.analyze_stock(symbol, period="1mo", train_model=False)
+            await ws_manager.send_personal_message(websocket, {
+                "type": "analysis_update",
+                "data": result,
+                "timestamp": datetime.now().isoformat()
+            })
+        except Exception as e:
+            await ws_manager.send_personal_message(websocket, {
+                "type": "error",
+                "message": str(e)
+            })
+
+        # Keep connection alive and handle messages
+        while True:
+            data = await websocket.receive_text()
+            message = json.loads(data)
+
+            if message.get("type") == "subscribe":
+                new_symbol = message.get("symbol")
+                if new_symbol:
+                    await ws_manager.subscribe(websocket, new_symbol)
+                    # Send initial data for new symbol
+                    try:
+                        result = analyzer.analyze_stock(new_symbol, period="1mo", train_model=False)
+                        await ws_manager.send_personal_message(websocket, {
+                            "type": "analysis_update",
+                            "data": result,
+                            "symbol": new_symbol,
+                            "timestamp": datetime.now().isoformat()
+                        })
+                    except Exception:
+                        pass
+
+            elif message.get("type") == "unsubscribe":
+                old_symbol = message.get("symbol")
+                if old_symbol:
+                    await ws_manager.unsubscribe(websocket, old_symbol)
+
+            elif message.get("type") == "refresh":
+                # Send fresh analysis
+                for sym in ws_manager.connection_symbols.get(websocket, []):
+                    try:
+                        result = analyzer.analyze_stock(sym, period="1mo", train_model=False)
+                        await ws_manager.send_personal_message(websocket, {
+                            "type": "analysis_update",
+                            "data": result,
+                            "symbol": sym,
+                            "timestamp": datetime.now().isoformat()
+                        })
+                    except Exception:
+                        pass
+
+            elif message.get("type") == "ping":
+                await ws_manager.send_personal_message(websocket, {"type": "pong"})
+
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket)
+    except Exception:
+        ws_manager.disconnect(websocket)
+
+
+@app.websocket("/ws/multi")
+async def websocket_multi_endpoint(websocket: WebSocket):
+    """
+    WebSocket endpoint for multi-symbol subscriptions.
+
+    Allows subscribing to multiple symbols at once.
+    """
+    await ws_manager.connect(websocket)
+
+    try:
+        while True:
+            data = await websocket.receive_text()
+            message = json.loads(data)
+
+            if message.get("type") == "subscribe_multi":
+                symbols = message.get("symbols", [])
+                for symbol in symbols:
+                    await ws_manager.subscribe(websocket, symbol)
+                    try:
+                        result = analyzer.analyze_stock(symbol, period="1mo", train_model=False)
+                        await ws_manager.send_personal_message(websocket, {
+                            "type": "analysis_update",
+                            "data": result,
+                            "symbol": symbol,
+                            "timestamp": datetime.now().isoformat()
+                        })
+                    except Exception:
+                        pass
+
+            elif message.get("type") == "ping":
+                await ws_manager.send_personal_message(websocket, {"type": "pong"})
+
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket)
+    except Exception:
+        ws_manager.disconnect(websocket)
+
+
+# Background task for periodic updates (optional)
+async def periodic_price_updates():
+    """Background task to send periodic price updates to connected clients."""
+    while True:
+        await asyncio.sleep(30)  # Update every 30 seconds
+
+        for symbol, connections in ws_manager.active_connections.items():
+            if connections:
+                try:
+                    # Get latest price
+                    result = analyzer.analyze_stock(symbol, period="1mo", train_model=False)
+                    if result and 'signal' in result:
+                        message = {
+                            "type": "price_update",
+                            "symbol": symbol,
+                            "price": result['signal'].get('price'),
+                            "timestamp": datetime.now().isoformat()
+                        }
+                        await ws_manager.broadcast_to_symbol(symbol, message)
+                except Exception:
+                    pass
+
+
+# Start background task on startup
+@app.on_event("startup")
+async def startup_event():
+    """Start background tasks on application startup."""
+    # Uncomment to enable periodic updates
+    # asyncio.create_task(periodic_price_updates())
+    pass
+
+
+# ==================== Advanced Backtest Endpoint ====================
+
+@app.get("/api/backtest/advanced/{symbol}")
+async def advanced_backtest(
+    symbol: str,
+    period: str = Query(default="2y", description="Backtest period"),
+    n_simulations: int = Query(default=100, description="Monte Carlo simulations")
+):
+    """
+    Run advanced backtest with Monte Carlo simulation.
+
+    Returns probabilistic metrics and confidence intervals.
+    """
+    try:
+        result = analyzer.run_advanced_backtest(
+            symbol,
+            period=period,
+            n_simulations=n_simulations
+        )
+
+        if 'error' in result:
+            raise HTTPException(status_code=404, detail=result['error'])
+
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -494,7 +659,8 @@ if __name__ == "__main__":
     import uvicorn
 
     print("=" * 60)
-    print("Saudi Stock AI Analyzer - API Server v2.1")
+    print("Saudi Stock AI Analyzer - API Server v3.0")
+    print("Advanced LSTM Edition (BiLSTM + Multi-Head Attention)")
     print("=" * 60)
     print(f"\nStarting server on http://{API_CONFIG['host']}:{API_CONFIG['port']}")
     print("\nAvailable endpoints:")
@@ -508,10 +674,13 @@ if __name__ == "__main__":
     print("  GET  /api/risk/{symbol}       - Risk metrics")
     print("  POST /api/cache/clear         - Clear model cache")
     print("  GET  /api/health              - Health check")
-    print("\n  Model Selection (Chronos-2 support):")
+    print("\n  Model Info:")
     print("  GET  /api/models              - List available models")
-    print("  POST /api/models/select       - Switch prediction model")
-    print("  GET  /api/chronos/{symbol}    - Direct Chronos forecast")
+    print("\n  Advanced Features:")
+    print("  GET  /api/backtest/advanced/{symbol} - Monte Carlo backtest")
+    print("\n  WebSocket (Real-time):")
+    print("  WS   /ws/{symbol}             - Real-time stock updates")
+    print("  WS   /ws/multi                - Multi-symbol subscriptions")
     print("\nPress Ctrl+C to stop the server")
     print("=" * 60)
 
