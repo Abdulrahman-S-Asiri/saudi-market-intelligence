@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const SignalPanel = ({ signal, lstmPrediction, loading }) => {
+const SignalPanel = ({ signal, lstmPrediction, loading, onCreatePosition, symbol }) => {
   const [animateSignal, setAnimateSignal] = useState(false);
 
   useEffect(() => {
@@ -239,6 +239,49 @@ const SignalPanel = ({ signal, lstmPrediction, loading }) => {
           <span className="target-value">{signal.price?.toFixed(2)} SAR</span>
         </div>
       </div>
+
+      {/* Open Position Button - Only show for BUY signals */}
+      {signal.action === 'BUY' && onCreatePosition && (
+        <motion.div
+          className="signal-action"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+        >
+          <button
+            className="btn-open-position"
+            onClick={() => onCreatePosition(symbol, signal.price)}
+            style={{
+              width: '100%',
+              padding: '14px 20px',
+              marginTop: '16px',
+              background: 'linear-gradient(135deg, #00c853 0%, #009624 100%)',
+              border: 'none',
+              borderRadius: '10px',
+              color: '#fff',
+              fontSize: '14px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.transform = 'translateY(-2px)';
+              e.target.style.boxShadow = '0 4px 20px rgba(0, 200, 83, 0.4)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.transform = 'translateY(0)';
+              e.target.style.boxShadow = 'none';
+            }}
+          >
+            <span>+</span>
+            Open Position from Signal
+          </button>
+        </motion.div>
+      )}
     </motion.div>
   );
 };

@@ -112,6 +112,37 @@ body {
   font-weight: 500;
 }
 
+/* Nav Tabs */
+.nav-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px;
+}
+
+.nav-tab {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.nav-tab:hover {
+  color: var(--text);
+}
+
+.nav-tab.active {
+  background: var(--accent);
+  color: #000;
+}
+
 .stock-select {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -367,6 +398,26 @@ body {
   font-size: 20px;
   font-weight: 700;
   color: var(--text);
+}
+
+/* Open Position from Signal Button */
+.btn-open-from-signal {
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #00c853 0%, #009624 100%);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-open-from-signal:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 200, 83, 0.4);
 }
 
 /* ===== STATS GRID ===== */

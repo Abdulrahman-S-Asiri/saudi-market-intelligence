@@ -4,8 +4,10 @@
  * BiLSTM + Multi-Head Attention Model
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import './styles/App.css';
+import PositionManager from './components/PositionManager';
+import usePositions from './hooks/usePositions';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -90,6 +92,23 @@ function App() {
   const [chartData, setChartData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [activeTab, setActiveTab] = useState('analysis'); // 'analysis' or 'positions'
+
+  // Position manager hook
+  const { createFromSignal, fetchPositions } = usePositions(false);
+
+  // Handle creating position from signal
+  const handleCreatePosition = useCallback(async (symbol, price) => {
+    try {
+      await createFromSignal(symbol, price);
+      // Show success notification (could be improved with a toast)
+      alert(`Position created for ${symbol} at ${price} SAR`);
+      // Switch to positions tab
+      setActiveTab('positions');
+    } catch (err) {
+      alert('Failed to create position: ' + err.message);
+    }
+  }, [createFromSignal]);
 
   // Fetch stocks list
   useEffect(() => {
@@ -139,17 +158,35 @@ function App() {
           </div>
         </div>
 
-        <select
-          className="stock-select"
-          value={selectedStock}
-          onChange={(e) => setSelectedStock(e.target.value)}
-        >
-          {stocks.map(stock => (
-            <option key={stock.symbol} value={stock.symbol}>
-              {stock.symbol} - {stock.name}
-            </option>
-          ))}
-        </select>
+        {/* Tab Navigation */}
+        <div className="nav-tabs">
+          <button
+            className={`nav-tab ${activeTab === 'analysis' ? 'active' : ''}`}
+            onClick={() => setActiveTab('analysis')}
+          >
+            Analysis
+          </button>
+          <button
+            className={`nav-tab ${activeTab === 'positions' ? 'active' : ''}`}
+            onClick={() => setActiveTab('positions')}
+          >
+            Positions
+          </button>
+        </div>
+
+        {activeTab === 'analysis' && (
+          <select
+            className="stock-select"
+            value={selectedStock}
+            onChange={(e) => setSelectedStock(e.target.value)}
+          >
+            {stocks.map(stock => (
+              <option key={stock.symbol} value={stock.symbol}>
+                {stock.symbol} - {stock.name}
+              </option>
+            ))}
+          </select>
+        )}
 
         <div className="status">
           <span className={`dot ${loading ? 'loading' : 'ready'}`} />
@@ -159,9 +196,15 @@ function App() {
 
       {/* Main Content */}
       <main className="main">
-        {error && <div className="error">⚠️ {error}</div>}
+        {/* Positions Tab */}
+        {activeTab === 'positions' && (
+          <PositionManager stocks={stocks} />
+        )}
 
-        {loading && !analysis && (
+        {/* Analysis Tab */}
+        {activeTab === 'analysis' && error && <div className="error">⚠️ {error}</div>}
+
+        {activeTab === 'analysis' && loading && !analysis && (
           <div className="loading-screen">
             <div className="spinner" />
             <p>Training AI Model...</p>
@@ -169,7 +212,7 @@ function App() {
           </div>
         )}
 
-        {analysis && (
+        {activeTab === 'analysis' && analysis && (
           <>
             {/* Hero Card */}
             <section className="hero glass">
@@ -197,6 +240,15 @@ function App() {
                   signal={analysis.signal?.action}
                   confidence={analysis.signal?.confidence}
                 />
+                {/* Open Position Button for BUY signals */}
+                {analysis.signal?.action === 'BUY' && (
+                  <button
+                    className="btn-open-from-signal"
+                    onClick={() => handleCreatePosition(selectedStock, analysis.signal.price)}
+                  >
+                    + Open Position
+                  </button>
+                )}
               </div>
             </section>
 
