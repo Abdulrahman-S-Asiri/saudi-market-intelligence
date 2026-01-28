@@ -107,7 +107,8 @@ class StockAnalyzer:
         symbol: str,
         period: str = "1y",
         train_model: bool = True,
-        force_retrain: bool = False
+        force_retrain: bool = False,
+        include_macro: bool = True
     ) -> Dict:
         """
         Perform complete analysis on a stock using Advanced LSTM model
@@ -117,14 +118,20 @@ class StockAnalyzer:
             period: Data period to fetch
             train_model: Whether to train/use ML model
             force_retrain: Force model retraining even if cached
+            include_macro: Whether to include macroeconomic features (Brent Oil, TASI)
 
         Returns:
             Dictionary with complete analysis results
         """
         print(f"Analyzing {symbol} with Advanced LSTM model...")
 
-        # 1. Fetch data
-        raw_data = self.loader.fetch_stock_data(symbol, period=period)
+        # 1. Fetch data with macro data (Brent Oil + TASI Index)
+        if include_macro:
+            print(f"Fetching stock data with macroeconomic features...")
+            raw_data = self.loader.fetch_stock_with_macro(symbol, period=period)
+        else:
+            raw_data = self.loader.fetch_stock_data(symbol, period=period)
+
         if raw_data is None or raw_data.empty:
             return {'error': f'No data found for symbol {symbol}'}
 
@@ -132,12 +139,19 @@ class StockAnalyzer:
         clean_data = self.preprocessor.clean_data(raw_data)
         processed_data = self.preprocessor.add_technical_indicators(clean_data)
 
+        # 2b. Add macro features if data is available
+        if include_macro and ('Oil_Close' in processed_data.columns or 'TASI_Close' in processed_data.columns):
+            processed_data = self.preprocessor.add_macro_features(processed_data)
+            print(f"Added macro features: Oil_Correlation, Market_Trend, Oil_Momentum, Market_Volatility, Stock_Market_Beta")
+
         # 3. Get stock info
         stock_info = self._get_stock_info(symbol)
 
         # 4. ML prediction with Advanced LSTM
         ml_prediction = None
         ml_confidence = None
+        ml_uncertainty = None
+        ml_raw_prediction = None
         model_info = None
         price_range = None
 
@@ -148,8 +162,12 @@ class StockAnalyzer:
                 )
                 ml_prediction = ml_result.get('direction')
                 ml_confidence = ml_result.get('confidence')
+                ml_raw_prediction = ml_result.get('raw_prediction')
                 model_info = ml_result.get('model_info')
                 price_range = ml_result.get('price_range')
+                # Get uncertainty from model_info (set by MC Dropout)
+                if model_info:
+                    ml_uncertainty = model_info.get('uncertainty')
             except Exception as e:
                 print(f"ML prediction failed: {e}")
                 import traceback
@@ -200,6 +218,8 @@ class StockAnalyzer:
             'ml_prediction': {
                 'direction': ml_prediction,
                 'confidence': round(ml_confidence * 100, 1) if ml_confidence else None,
+                'prediction': ml_raw_prediction,  # Raw prediction value from model
+                'uncertainty': ml_uncertainty,     # MC Dropout variance (for calibrated confidence)
                 'model_type': 'advanced_lstm',
                 'model_info': model_info,
                 'price_range': price_range
@@ -261,6 +281,11 @@ class StockAnalyzer:
         # Add advanced features
         df_advanced = self._advanced_preprocessor.add_technical_indicators(df.copy())
         df_advanced = self._advanced_preprocessor.add_advanced_features(df_advanced)
+
+        # Add macro features if available
+        if 'Oil_Close' in df_advanced.columns or 'TASI_Close' in df_advanced.columns:
+            df_advanced = self._advanced_preprocessor.add_macro_features(df_advanced)
+            print(f"Added macro features for LSTM prediction")
 
         # Get available features
         features = [f for f in ADVANCED_LSTM_FEATURES if f in df_advanced.columns]
@@ -351,20 +376,33 @@ class StockAnalyzer:
             df_advanced, features=features, sequence_length=sequence_length
         )
 
-        # Predict with MC Dropout for better uncertainty
-        if config.get('output_uncertainty', True):
-            result = predictor.predict_with_mc_dropout(
-                latest_sequence,
-                n_samples=config.get('mc_dropout_samples', 50)
-            )
-            prediction = result['prediction'][0][0]
-            confidence = float(result['confidence'][0][0])
-            uncertainty = float(result['std'][0][0])
-            model_info['uncertainty'] = round(uncertainty, 4)
-        else:
-            result = predictor.predict(latest_sequence, return_confidence=True)
-            prediction = result['prediction'][0][0]
-            confidence = float(result['confidence'][0][0])
+        # ============================================================
+        # MONTE CARLO DROPOUT PREDICTION (N=10 samples)
+        # ============================================================
+        # 1. Run model 10 times with DROPOUT ACTIVE
+        # 2. prediction = MEAN of 10 runs (target price)
+        # 3. uncertainty = STD DEV of 10 runs (model confusion)
+        # 4. confidence = calculate_confidence(std_dev)
+        #    - Low std_dev → High confidence
+        #    - High std_dev → Low confidence
+        # ============================================================
+        mc_samples = config.get('mc_dropout_samples', 10)  # Default N=10 for speed
+
+        result = predictor.predict_with_calibrated_confidence(
+            latest_sequence,
+            n_samples=mc_samples,
+            use_batched=True  # Use optimized batched inference
+        )
+
+        # Extract MC Dropout results
+        prediction = float(result['prediction'][0])
+        confidence = float(result['confidence'][0])
+        uncertainty = float(result['prediction_std'][0])
+
+        # Store uncertainty in model info for API response
+        model_info['uncertainty'] = round(uncertainty, 4)
+        model_info['mc_samples'] = mc_samples
+        model_info['confidence_method'] = 'mc_dropout'
 
         # Determine direction
         current_price = float(df_advanced['Close'].iloc[-1])
@@ -398,7 +436,8 @@ class StockAnalyzer:
         self,
         symbol: str,
         period: str = "2y",
-        n_simulations: int = None
+        n_simulations: int = None,
+        include_macro: bool = True
     ) -> Dict:
         """
         Run advanced backtest with Monte Carlo simulation.
@@ -407,6 +446,7 @@ class StockAnalyzer:
             symbol: Stock symbol
             period: Data period
             n_simulations: Number of MC simulations (default from config)
+            include_macro: Whether to include macroeconomic features
 
         Returns:
             Advanced backtest results with probabilistic metrics
@@ -416,13 +456,17 @@ class StockAnalyzer:
 
         print(f"Running advanced backtest for {symbol} ({n_simulations} simulations)...")
 
-        # Fetch and process data
-        raw_data = self.loader.fetch_stock_data(symbol, period=period)
+        # Fetch and process data with macro features
+        if include_macro:
+            raw_data = self.loader.fetch_stock_with_macro(symbol, period=period)
+        else:
+            raw_data = self.loader.fetch_stock_data(symbol, period=period)
+
         if raw_data is None or raw_data.empty:
             return {'error': f'No data found for symbol {symbol}'}
 
-        # Preprocess with advanced features
-        df_processed, preprocessor = preprocess_for_advanced_lstm(raw_data)
+        # Preprocess with advanced features (including macro if available)
+        df_processed, preprocessor = preprocess_for_advanced_lstm(raw_data, include_macro=include_macro)
 
         # Get features
         features = [f for f in ADVANCED_LSTM_FEATURES if f in df_processed.columns]
@@ -511,7 +555,8 @@ class StockAnalyzer:
         symbol: str,
         period: str = "1y",
         min_confidence: float = 60,
-        hold_period: int = 5
+        hold_period: int = 5,
+        include_macro: bool = True
     ) -> Dict:
         """
         Run backtest on a stock
@@ -521,19 +566,28 @@ class StockAnalyzer:
             period: Data period
             min_confidence: Minimum confidence to take trades
             hold_period: Default holding period in days
+            include_macro: Whether to include macroeconomic features
 
         Returns:
             Backtest results dictionary
         """
         print(f"Running backtest for {symbol}...")
 
-        # Fetch and process data
-        raw_data = self.loader.fetch_stock_data(symbol, period=period)
+        # Fetch and process data with macro features
+        if include_macro:
+            raw_data = self.loader.fetch_stock_with_macro(symbol, period=period)
+        else:
+            raw_data = self.loader.fetch_stock_data(symbol, period=period)
+
         if raw_data is None or raw_data.empty:
             return {'error': f'No data found for symbol {symbol}'}
 
         clean_data = self.preprocessor.clean_data(raw_data)
         processed_data = self.preprocessor.add_technical_indicators(clean_data)
+
+        # Add macro features if available
+        if include_macro and ('Oil_Close' in processed_data.columns or 'TASI_Close' in processed_data.columns):
+            processed_data = self.preprocessor.add_macro_features(processed_data)
 
         # Run backtest
         result = self.backtest_engine.run(

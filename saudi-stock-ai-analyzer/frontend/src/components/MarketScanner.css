@@ -1,0 +1,456 @@
+/* ===================================
+   Market Scanner Component
+   Clean, Actionable Design
+   =================================== */
+
+.market-scanner {
+  background: rgba(18, 18, 26, 0.9);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+/* Header */
+.scanner-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.scanner-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.scanner-icon {
+  font-size: 20px;
+}
+
+.scanner-title h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0;
+}
+
+.scanner-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.scanner-updated {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.scanner-refresh {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.scanner-refresh:hover:not(:disabled) {
+  background: rgba(0, 212, 255, 0.1);
+  border-color: rgba(0, 212, 255, 0.3);
+  color: #00d4ff;
+}
+
+.scanner-refresh:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.scanner-refresh .spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Error */
+.scanner-error {
+  padding: 12px 20px;
+  background: rgba(255, 193, 7, 0.1);
+  color: #ffc107;
+  font-size: 13px;
+  text-align: center;
+}
+
+/* Content Grid */
+.scanner-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* Scanner Card */
+.scanner-card {
+  background: rgba(18, 18, 26, 0.95);
+  padding: 16px;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.card-emoji {
+  font-size: 20px;
+}
+
+.card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  flex: 1;
+}
+
+.scanner-card.gainers .card-title {
+  color: #00ffa3;
+}
+
+.scanner-card.losers .card-title {
+  color: #ff4757;
+}
+
+.card-count {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* Labels Row */
+.card-labels {
+  display: grid;
+  grid-template-columns: 30px 1fr 70px 80px 80px;
+  gap: 8px;
+  padding: 8px 0;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(255, 255, 255, 0.35);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.label-price,
+.label-change,
+.label-conf {
+  text-align: right;
+}
+
+/* Card List */
+.card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 200px;
+}
+
+/* Scanner Item */
+.scanner-item {
+  display: grid;
+  grid-template-columns: 30px 1fr 70px 80px 80px;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 8px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.scanner-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.scanner-item.gainer:hover {
+  background: rgba(0, 255, 163, 0.08);
+}
+
+.scanner-item.loser:hover {
+  background: rgba(255, 71, 87, 0.08);
+}
+
+.scanner-item-rank {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.3);
+  text-align: center;
+}
+
+.scanner-item.gainer .scanner-item-rank {
+  color: rgba(0, 255, 163, 0.5);
+}
+
+.scanner-item.loser .scanner-item-rank {
+  color: rgba(255, 71, 87, 0.5);
+}
+
+.scanner-item-info {
+  overflow: hidden;
+}
+
+.scanner-item-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.scanner-item-symbol {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.scanner-item-price {
+  text-align: right;
+}
+
+.price-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.price-label {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-left: 2px;
+}
+
+.scanner-item-change {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  font-weight: 600;
+}
+
+.scanner-item-change.positive {
+  color: #00ffa3;
+}
+
+.scanner-item-change.negative {
+  color: #ff4757;
+}
+
+.change-icon {
+  font-size: 10px;
+}
+
+.change-value {
+  font-size: 13px;
+}
+
+.scanner-item-confidence {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.confidence-bar {
+  width: 40px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.confidence-fill {
+  height: 100%;
+  border-radius: 2px;
+}
+
+.scanner-item.gainer .confidence-fill {
+  background: linear-gradient(90deg, #00ffa3, #00d4ff);
+}
+
+.scanner-item.loser .confidence-fill {
+  background: linear-gradient(90deg, #ff4757, #ff6b81);
+}
+
+.confidence-text {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  min-width: 28px;
+  text-align: right;
+}
+
+/* Empty State */
+.card-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 13px;
+}
+
+/* Footer */
+.scanner-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: rgba(0, 0, 0, 0.2);
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.footer-dot {
+  color: rgba(255, 255, 255, 0.2);
+}
+
+/* Skeleton Loading */
+.scanner-item-skeleton {
+  display: grid;
+  grid-template-columns: 30px 1fr 70px 80px 80px;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 8px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 8px;
+}
+
+.skeleton-rank {
+  width: 20px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  margin: 0 auto;
+}
+
+.skeleton-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.skeleton-name {
+  height: 14px;
+  width: 80%;
+  background: linear-gradient(90deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.03) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 3px;
+}
+
+.skeleton-symbol {
+  height: 10px;
+  width: 50%;
+  background: linear-gradient(90deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.03) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  animation-delay: 0.1s;
+  border-radius: 3px;
+}
+
+.skeleton-price,
+.skeleton-change,
+.skeleton-confidence {
+  height: 16px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.03) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 3px;
+}
+
+.skeleton-price { animation-delay: 0.2s; }
+.skeleton-change { animation-delay: 0.3s; }
+.skeleton-confidence { animation-delay: 0.4s; }
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Compact Mode */
+.market-scanner.compact .scanner-content {
+  grid-template-columns: 1fr;
+}
+
+.market-scanner.compact .card-labels {
+  grid-template-columns: 25px 1fr 60px 70px;
+}
+
+.market-scanner.compact .scanner-item {
+  grid-template-columns: 25px 1fr 60px 70px;
+}
+
+.market-scanner.compact .scanner-item-confidence {
+  display: none;
+}
+
+.market-scanner.compact .card-list {
+  min-height: 150px;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .scanner-content {
+    grid-template-columns: 1fr;
+  }
+
+  .scanner-card + .scanner-card {
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+}
+
+@media (max-width: 600px) {
+  .card-labels {
+    grid-template-columns: 25px 1fr 65px 70px;
+  }
+
+  .card-labels .label-conf {
+    display: none;
+  }
+
+  .scanner-item {
+    grid-template-columns: 25px 1fr 65px 70px;
+  }
+
+  .scanner-item-confidence {
+    display: none;
+  }
+
+  .scanner-item-name {
+    font-size: 12px;
+  }
+
+  .change-value {
+    font-size: 12px;
+  }
+
+  .scanner-footer {
+    flex-wrap: wrap;
+    gap: 4px 8px;
+  }
+}

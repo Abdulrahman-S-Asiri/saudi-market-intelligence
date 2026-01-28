@@ -1,0 +1,35 @@
+[
+  {
+    "timestamp": "2026-01-28T10:56:04.337787",
+    "signal": "HOLD",
+    "confidence": 42.4,
+    "price": 16.68000030517578,
+    "indicators": {
+      "rsi": 81.50288555305102,
+      "macd": 0.38807629346319494,
+      "regime": "sideways"
+    }
+  },
+  {
+    "timestamp": "2026-01-28T10:56:47.012946",
+    "signal": "HOLD",
+    "confidence": 42.4,
+    "price": 16.649999618530273,
+    "indicators": {
+      "rsi": 80.80227198450513,
+      "macd": 0.3856830762948906,
+      "regime": "sideways"
+    }
+  },
+  {
+    "timestamp": "2026-01-28T14:16:21.623467",
+    "signal": "HOLD",
+    "confidence": 42.4,
+    "price": 16.670000076293945,
+    "indicators": {
+      "rsi": 81.26800162701728,
+      "macd": 0.3872785544070929,
+      "regime": "sideways"
+    }
+  }
+]

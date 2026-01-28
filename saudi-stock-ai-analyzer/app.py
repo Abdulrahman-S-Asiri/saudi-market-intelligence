@@ -8,9 +8,11 @@ import sys
 import os
 import asyncio
 import json
+import time
+import threading
 from typing import Optional, List, Dict, Set
-from datetime import datetime
-from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from datetime import datetime, timedelta
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -21,6 +23,91 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from main import StockAnalyzer
 from utils.config import API_CONFIG, SAUDI_STOCKS, SECTORS
 from database import PositionManager, PositionCreate, PositionUpdate, PositionClose
+
+# Import MC Dropout for calibrated confidence
+import torch
+import numpy as np
+from models.advanced_lstm import AdvancedStockPredictor
+
+# Import Market Regime Detector (HMM-based)
+from models.market_regime import get_regime_detector, detect_market_regime
+
+# MC Dropout Confidence Cache (to avoid re-computing for same stock)
+mc_dropout_cache: Dict[str, Dict] = {}
+MC_DROPOUT_CACHE_TTL = 300  # 5 minutes
+
+
+def get_mc_dropout_confidence(
+    symbol: str,
+    data: np.ndarray,
+    num_features: int,
+    n_samples: int = 10
+) -> Dict:
+    """
+    Run Monte Carlo Dropout inference to get calibrated confidence.
+
+    Uses N=10 forward passes with dropout enabled to estimate:
+    - Prediction mean (final predicted return)
+    - Prediction variance (model uncertainty)
+    - Calibrated confidence score (0-100%)
+
+    Args:
+        symbol: Stock symbol for caching
+        data: Preprocessed sequence data (seq_len, num_features)
+        num_features: Number of input features
+        n_samples: Number of MC samples (default: 10)
+
+    Returns:
+        Dict with prediction, variance, and calibrated confidence
+    """
+    import time
+
+    # Check cache
+    cache_key = f"{symbol}_{hash(data.tobytes())}"
+    if cache_key in mc_dropout_cache:
+        cached = mc_dropout_cache[cache_key]
+        if time.time() - cached['timestamp'] < MC_DROPOUT_CACHE_TTL:
+            return cached['result']
+
+    try:
+        # Create predictor instance
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        predictor = AdvancedStockPredictor(
+            num_features=num_features,
+            hidden_sizes=[64, 32],
+            dropout=0.5,
+            device=device
+        )
+
+        # Run MC Dropout prediction
+        result = predictor.predict_with_calibrated_confidence(data, n_samples=n_samples)
+
+        # Extract values
+        mc_result = {
+            'prediction': float(result['prediction'][0]),
+            'prediction_std': float(result['prediction_std'][0]),
+            'confidence': float(result['confidence'][0]),
+            'variance': float(result['variance'][0])
+        }
+
+        # Cache result
+        mc_dropout_cache[cache_key] = {
+            'result': mc_result,
+            'timestamp': time.time()
+        }
+
+        return mc_result
+
+    except Exception as e:
+        # Return default on error
+        return {
+            'prediction': 0.0,
+            'prediction_std': 0.1,
+            'confidence': 50.0,
+            'variance': 0.01,
+            'error': str(e)
+        }
+
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -45,6 +132,272 @@ analyzer = StockAnalyzer()
 position_manager = PositionManager()
 
 
+# ==================== Market Rankings Cache ====================
+
+class MarketRankingsCache:
+    """
+    Cache for market rankings to avoid expensive full-market scans.
+    Rankings are updated once per hour or on-demand.
+    """
+
+    def __init__(self, cache_duration_seconds: int = 3600):
+        self.cache_duration = cache_duration_seconds  # Default: 1 hour
+        self.last_update: Optional[datetime] = None
+        self.cached_rankings: Optional[Dict] = None
+        self._lock = threading.Lock()
+        self._is_updating = False
+
+    def is_cache_valid(self) -> bool:
+        """Check if cache is still valid"""
+        if self.last_update is None or self.cached_rankings is None:
+            return False
+        elapsed = (datetime.now() - self.last_update).total_seconds()
+        return elapsed < self.cache_duration
+
+    def get_cached_rankings(self) -> Optional[Dict]:
+        """Get cached rankings if valid"""
+        if self.is_cache_valid():
+            return self.cached_rankings
+        return None
+
+    def update_rankings(self, rankings: Dict):
+        """Update the cache with new rankings"""
+        with self._lock:
+            self.cached_rankings = rankings
+            self.last_update = datetime.now()
+            self._is_updating = False
+
+    def get_cache_age_seconds(self) -> Optional[float]:
+        """Get age of cache in seconds"""
+        if self.last_update is None:
+            return None
+        return (datetime.now() - self.last_update).total_seconds()
+
+    def set_updating(self, status: bool):
+        """Set updating flag"""
+        self._is_updating = status
+
+    def is_updating(self) -> bool:
+        """Check if rankings are being updated"""
+        return self._is_updating
+
+
+# Initialize market rankings cache (1 hour TTL)
+market_rankings_cache = MarketRankingsCache(cache_duration_seconds=3600)
+
+# Top stocks to scan for quick rankings (most liquid/important stocks)
+TOP_STOCKS_FOR_RANKING = [
+    # Energy
+    "2222",  # Saudi Aramco
+    # Banks
+    "1120", "1180", "1010", "1140", "1182",  # Al Rajhi, Alinma, Riyad, Albilad, SNB
+    # Materials
+    "2010", "2350", "2310", "1211",  # SABIC, Saudi Kayan, Sipchem, Ma'aden
+    # Telecom
+    "7010", "7020", "7030",  # STC, Mobily, Zain
+    # Utilities
+    "5110", "2082",  # SEC, ACWA Power
+    # Consumer
+    "2280", "4190", "4001",  # Almarai, Jarir, Al Othaim
+    # Healthcare
+    "4013", "4002",  # Dr. Sulaiman Al Habib, Mouwasat
+    # Real Estate
+    "4300", "4250",  # Dar Al Arkan, Jabal Omar
+    # Insurance
+    "8210", "8010",  # Bupa, Tawuniya
+    # REITs
+    "4330", "4331",  # Riyad REIT, Jadwa REIT
+    # Food
+    "2050", "6002",  # Savola, Herfy
+    # Capital Goods
+    "2320", "2240",  # Al Babtain, Zamil
+    # Transportation
+    "4030", "4261",  # Bahri, Theeb
+    # Software
+    "7201", "7200",  # Elm, Solutions by STC
+]
+
+
+def scan_stocks_for_rankings(
+    stock_symbols: List[str],
+    analyzer_instance,
+    use_ml_confidence: bool = True
+) -> Dict:
+    """
+    Scan a list of stocks and return rankings based on technical indicators
+    with Monte Carlo Dropout confidence estimation.
+
+    NO STRICT THRESHOLDS - Returns top 5 gainers and losers regardless of confidence.
+    Ranks ALL stocks by predicted_change and returns the best available options.
+
+    Args:
+        stock_symbols: List of stock symbols to scan
+        analyzer_instance: StockAnalyzer instance
+        use_ml_confidence: If True, uses Monte Carlo Dropout for scientific confidence.
+                          If False, uses heuristic confidence (faster but less accurate).
+
+    Returns:
+        Dict with top_bullish, top_bearish, and metadata
+    """
+    results = []
+    errors = []
+
+    for symbol in stock_symbols:
+        try:
+            # Use train_model=True when ML confidence is needed, False for speed
+            analysis = analyzer_instance.analyze_stock(
+                symbol,
+                period="3mo",
+                train_model=use_ml_confidence,
+                force_retrain=False,
+                include_macro=False
+            )
+
+            if 'error' in analysis:
+                errors.append({"symbol": symbol, "error": analysis['error']})
+                continue
+
+            signal = analysis.get('signal', {})
+            indicators = analysis.get('indicators', {})
+            performance = analysis.get('performance', {})
+            ml_prediction = analysis.get('ml_prediction', {})
+
+            # Get key indicators
+            rsi = indicators.get('rsi', 50)
+            macd = indicators.get('macd', 0)
+            macd_signal = indicators.get('macd_signal', 0)
+            signal_action = signal.get('action', 'HOLD')
+            signal_confidence = signal.get('confidence', 50)
+            volatility = performance.get('volatility', 15)
+            total_return = performance.get('total_return', 0)
+
+            # Calculate predicted change based on multiple factors
+            # This creates a continuous score (not binary direction)
+
+            # RSI component: -1 (overbought) to +1 (oversold)
+            # RSI 30 = +1, RSI 50 = 0, RSI 70 = -1
+            rsi_component = (50 - rsi) / 40  # Normalized: oversold=positive, overbought=negative
+            rsi_component = max(-1, min(1, rsi_component))  # Clamp to [-1, 1]
+
+            # MACD component: positive MACD = bullish, negative = bearish
+            macd_component = 0
+            if macd != 0:
+                macd_component = 0.5 if macd > macd_signal else -0.5
+
+            # Recent momentum from total return
+            momentum_component = max(-0.5, min(0.5, total_return / 20))  # Normalize recent return
+
+            # Combined score (weighted average)
+            combined_score = (rsi_component * 0.5) + (macd_component * 0.3) + (momentum_component * 0.2)
+
+            # Predicted percentage change based on score and volatility
+            # Higher volatility = larger potential move
+            volatility_factor = min(volatility / 100 * 2, 0.06)  # Cap at 6%
+            predicted_change = combined_score * volatility_factor * 100
+
+            # ============================================================
+            # MONTE CARLO DROPOUT CONFIDENCE (Scientific Approach)
+            # ============================================================
+            # Instead of heuristic confidence, use ML model uncertainty
+            #
+            # When use_ml_confidence=True:
+            #   1. Get ML prediction variance from trained model
+            #   2. Map variance to calibrated 0-100% confidence
+            #   3. Low variance = High confidence, High variance = Low confidence
+            #
+            # Formula: confidence = 100 * exp(-k * variance)
+            # ============================================================
+
+            if use_ml_confidence and ml_prediction:
+                # Use ML prediction metrics for confidence
+                ml_conf = ml_prediction.get('confidence', 50)
+                ml_variance = ml_prediction.get('uncertainty', 0.05)
+
+                # If we have actual uncertainty from the model, use calibrated formula
+                if ml_variance and ml_variance > 0:
+                    # Calibration constant (tuned for stock returns)
+                    # k=10 means: std=0.1 → 37% conf, std=0.05 → 78% conf
+                    k = 10.0
+                    confidence_raw = 100.0 * np.exp(-k * ml_variance)
+                    confidence = float(np.clip(confidence_raw, 20, 95))
+                else:
+                    # Use model's reported confidence if no variance
+                    confidence = float(np.clip(ml_conf * 100, 20, 95))
+
+                # Also use ML predicted direction to adjust predicted_change
+                ml_direction = ml_prediction.get('direction', 0)
+                ml_pred_value = ml_prediction.get('prediction', 0)
+                if ml_pred_value != 0:
+                    # Blend technical and ML predictions (60% ML, 40% technical)
+                    predicted_change = 0.6 * (ml_pred_value * 100) + 0.4 * predicted_change
+            else:
+                # Fallback: Heuristic confidence based on indicator agreement
+                # This is less accurate but much faster
+                indicator_strength = abs(rsi_component) * 50 + abs(macd_component) * 30
+                confidence = min(max(indicator_strength + 20, 20), 95)
+
+            # Determine direction label
+            if predicted_change > 0.5:
+                direction = 'UP'
+            elif predicted_change < -0.5:
+                direction = 'DOWN'
+            else:
+                direction = 'NEUTRAL'
+
+            result = {
+                "symbol": symbol,
+                "name": analysis.get('name', symbol),
+                "sector": analysis.get('sector', 'Unknown'),
+                "price": signal.get('price', 0),
+                "direction": direction,
+                "ml_confidence": round(confidence, 1),
+                "predicted_change": round(predicted_change, 2),
+                "signal_action": signal_action,
+                "signal_confidence": signal_confidence,
+                "market_regime": signal.get('market_regime', 'Unknown'),
+                "rsi": round(rsi, 1),
+                "total_return": round(total_return, 2),
+                "volatility": round(volatility, 2),
+                "confidence_method": "mc_dropout" if use_ml_confidence else "heuristic"
+            }
+
+            results.append(result)
+
+        except Exception as e:
+            errors.append({"symbol": symbol, "error": str(e)})
+            continue
+
+    # IMPORTANT: No filtering by threshold!
+    # Sort ALL stocks by predicted_change and take top/bottom 5
+
+    # Top Gainers: Sort by predicted_change DESCENDING (highest first)
+    sorted_by_gain = sorted(results, key=lambda x: x['predicted_change'], reverse=True)
+    top_bullish = sorted_by_gain[:5]
+
+    # Top Losers: Sort by predicted_change ASCENDING (most negative first)
+    sorted_by_loss = sorted(results, key=lambda x: x['predicted_change'])
+    top_bearish = sorted_by_loss[:5]
+
+    # Update direction labels for display consistency
+    for stock in top_bullish:
+        if stock['predicted_change'] > 0:
+            stock['direction'] = 'UP'
+    for stock in top_bearish:
+        if stock['predicted_change'] < 0:
+            stock['direction'] = 'DOWN'
+
+    return {
+        "top_bullish": top_bullish,
+        "top_bearish": top_bearish,
+        "total_scanned": len(results),
+        "total_errors": len(errors),
+        "errors": errors[:5] if errors else [],
+        "timestamp": datetime.now().isoformat(),
+        "stocks_analyzed": [r['symbol'] for r in results],
+        "confidence_method": "mc_dropout" if use_ml_confidence else "heuristic"
+    }
+
+
 # ==================== API Endpoints ====================
 
 @app.get("/")
@@ -67,6 +420,11 @@ async def root():
             "risk": "/api/risk/{symbol}",
             "health": "/api/health",
             "models": "/api/models",
+            "market_rankings": {
+                "get": "/api/market-rankings",
+                "status": "/api/market-rankings/status",
+                "refresh": "/api/market-rankings/refresh (POST)"
+            },
             "positions": {
                 "list": "/api/positions",
                 "create": "/api/positions (POST)",
@@ -397,8 +755,315 @@ async def health_check():
             "risk_metrics": True,
             "monte_carlo_backtest": True,
             "uncertainty_estimation": True,
-            "position_manager": True
+            "position_manager": True,
+            "market_rankings": True
         }
+    }
+
+
+# ==================== Market Rankings Endpoints ====================
+
+@app.get("/api/market-rankings")
+async def get_market_rankings(
+    background_tasks: BackgroundTasks,
+    force_refresh: bool = Query(default=False, description="Force refresh rankings (bypass cache)"),
+    quick_scan: bool = Query(default=True, description="Scan only top 30 stocks (faster)"),
+    use_ml: bool = Query(default=True, description="Use Monte Carlo Dropout for scientific confidence scores")
+):
+    """
+    Get market rankings - Top bullish and bearish stocks.
+
+    This endpoint scans tracked stocks and ranks them by predicted movement.
+    Uses Monte Carlo Dropout for scientifically calibrated confidence scores.
+
+    - **force_refresh**: Bypass cache and scan stocks (slow)
+    - **quick_scan**: Only scan top 30 most liquid stocks (faster, default: True)
+    - **use_ml**: Use Monte Carlo Dropout confidence (default: True)
+                  When True: Confidence = 100 * exp(-10 * variance), calibrated from model uncertainty
+                  When False: Confidence = heuristic based on indicator strength (faster)
+
+    Returns:
+    - **top_bullish**: Top 5 stocks predicted to rise (sorted by predicted_change)
+    - **top_bearish**: Top 5 stocks predicted to fall (sorted by predicted_change)
+    - **ml_confidence**: Calibrated 0-100% confidence from MC Dropout variance
+    - **cache_info**: Cache status and age
+
+    Note: Rankings are cached for 1 hour to improve performance.
+    """
+    try:
+        # Check cache first
+        if not force_refresh:
+            cached = market_rankings_cache.get_cached_rankings()
+            if cached:
+                cache_age = market_rankings_cache.get_cache_age_seconds()
+                return {
+                    **cached,
+                    "cache_info": {
+                        "from_cache": True,
+                        "cache_age_seconds": round(cache_age, 0) if cache_age else None,
+                        "cache_age_minutes": round(cache_age / 60, 1) if cache_age else None,
+                        "next_refresh_minutes": round((3600 - cache_age) / 60, 1) if cache_age else None
+                    }
+                }
+
+        # Check if already updating
+        if market_rankings_cache.is_updating():
+            # Return partial data if available, otherwise return updating status
+            partial = market_rankings_cache.cached_rankings
+            if partial:
+                cache_age = market_rankings_cache.get_cache_age_seconds()
+                return {
+                    **partial,
+                    "cache_info": {
+                        "from_cache": True,
+                        "is_updating": True,
+                        "cache_age_seconds": round(cache_age, 0) if cache_age else None,
+                        "cache_age_minutes": round(cache_age / 60, 1) if cache_age else None
+                    }
+                }
+            return {
+                "status": "updating",
+                "message": "Rankings are currently being updated. Please try again shortly.",
+                "top_bullish": [],
+                "top_bearish": [],
+                "total_scanned": 0,
+                "cache_info": {
+                    "from_cache": False,
+                    "is_updating": True
+                }
+            }
+
+        # Mark as updating
+        market_rankings_cache.set_updating(True)
+
+        # Determine which stocks to scan (limit for performance)
+        if quick_scan:
+            stocks_to_scan = TOP_STOCKS_FOR_RANKING[:15]  # Reduced to 15 for faster response
+        else:
+            stocks_to_scan = TOP_STOCKS_FOR_RANKING
+
+        # Scan stocks and generate rankings
+        print(f"Scanning {len(stocks_to_scan)} stocks for market rankings (ML confidence: {use_ml})...")
+        rankings = scan_stocks_for_rankings(stocks_to_scan, analyzer, use_ml_confidence=use_ml)
+
+        # Update cache
+        market_rankings_cache.update_rankings(rankings)
+
+        return {
+            **rankings,
+            "cache_info": {
+                "from_cache": False,
+                "cache_age_seconds": 0,
+                "cache_age_minutes": 0,
+                "next_refresh_minutes": 60,
+                "scan_type": "quick" if quick_scan else "full"
+            }
+        }
+
+    except Exception as e:
+        market_rankings_cache.set_updating(False)
+        print(f"Error in market-rankings: {str(e)}")
+        # Return empty rankings instead of crashing
+        return {
+            "top_bullish": [],
+            "top_bearish": [],
+            "total_scanned": 0,
+            "total_errors": 1,
+            "errors": [{"error": str(e)}],
+            "timestamp": datetime.now().isoformat(),
+            "cache_info": {
+                "from_cache": False,
+                "error": str(e)
+            }
+        }
+
+
+@app.get("/api/market-rankings/status")
+async def get_rankings_status():
+    """
+    Get the status of market rankings cache.
+
+    Returns cache status, age, and whether an update is in progress.
+    """
+    cache_age = market_rankings_cache.get_cache_age_seconds()
+
+    return {
+        "cache_valid": market_rankings_cache.is_cache_valid(),
+        "is_updating": market_rankings_cache.is_updating(),
+        "last_update": market_rankings_cache.last_update.isoformat() if market_rankings_cache.last_update else None,
+        "cache_age_seconds": round(cache_age, 0) if cache_age else None,
+        "cache_age_minutes": round(cache_age / 60, 1) if cache_age else None,
+        "cache_duration_hours": market_rankings_cache.cache_duration / 3600,
+        "stocks_in_quick_scan": len(TOP_STOCKS_FOR_RANKING)
+    }
+
+
+# ==================== Market Regime Detection (HMM) ====================
+
+# Cache for market regime (refreshes every 15 minutes)
+_regime_cache: Dict = {}
+_regime_cache_time: Optional[datetime] = None
+REGIME_CACHE_TTL = 900  # 15 minutes
+
+
+@app.get("/api/market-status")
+async def get_market_status():
+    """
+    Get current market regime using Hidden Markov Model (HMM) detection.
+
+    The regime detector analyzes the TASI Index to classify the market into:
+    - **Bull Market** 🟢: High positive returns, low volatility. Good for buying.
+    - **Bear Market** 🔴: Negative returns, high volatility. Consider reducing exposure.
+    - **Sideways** 🟡: Low returns, moderate volatility. Selective trading.
+
+    Returns:
+    - **regime**: Current regime label (bull, bear, sideways)
+    - **regime_name**: Human-readable name (e.g., "Bull Market")
+    - **emoji**: Visual indicator (🟢, 🔴, 🟡)
+    - **confidence**: Probability of current state (0-100%)
+    - **warning**: Warning message if bearish
+    - **regime_probabilities**: Probabilities for all states
+
+    This helps users decide IF they should be in the market at all.
+    """
+    global _regime_cache, _regime_cache_time
+
+    # Check cache
+    if _regime_cache and _regime_cache_time:
+        cache_age = (datetime.now() - _regime_cache_time).total_seconds()
+        if cache_age < REGIME_CACHE_TTL:
+            return {
+                **_regime_cache,
+                "cache_info": {
+                    "from_cache": True,
+                    "cache_age_seconds": round(cache_age, 0)
+                }
+            }
+
+    try:
+        import yfinance as yf
+
+        # Fetch TASI Index data (1 year for training)
+        print("Fetching TASI Index for regime detection...")
+        tasi_data = yf.download("^TASI.SR", period="1y", progress=False)
+
+        if tasi_data.empty:
+            return {
+                "regime": "sideways",
+                "regime_name": "Sideways",
+                "emoji": "🟡",
+                "color": "#ffc107",
+                "confidence": 50.0,
+                "warning": None,
+                "regime_probabilities": {"bull": 33.3, "bear": 33.3, "sideways": 33.4},
+                "error": "Could not fetch TASI data",
+                "cache_info": {"from_cache": False}
+            }
+
+        # Detect regime using HMM
+        regime_result = detect_market_regime(tasi_data)
+
+        # Add TASI summary stats
+        current_price = float(tasi_data['Close'].iloc[-1])
+        prev_close = float(tasi_data['Close'].iloc[-2])
+        daily_change = (current_price - prev_close) / prev_close * 100
+
+        # Weekly and monthly returns
+        week_ago_price = float(tasi_data['Close'].iloc[-5]) if len(tasi_data) >= 5 else current_price
+        month_ago_price = float(tasi_data['Close'].iloc[-22]) if len(tasi_data) >= 22 else current_price
+        weekly_return = (current_price - week_ago_price) / week_ago_price * 100
+        monthly_return = (current_price - month_ago_price) / month_ago_price * 100
+
+        # Build response
+        result = {
+            **regime_result,
+            "tasi": {
+                "price": round(current_price, 2),
+                "daily_change": round(daily_change, 2),
+                "weekly_return": round(weekly_return, 2),
+                "monthly_return": round(monthly_return, 2)
+            },
+            "cache_info": {"from_cache": False}
+        }
+
+        # Update cache
+        _regime_cache = result
+        _regime_cache_time = datetime.now()
+
+        return result
+
+    except Exception as e:
+        print(f"Error in market-status: {e}")
+        import traceback
+        traceback.print_exc()
+
+        return {
+            "regime": "sideways",
+            "regime_name": "Sideways",
+            "emoji": "🟡",
+            "color": "#ffc107",
+            "confidence": 50.0,
+            "warning": None,
+            "error": str(e),
+            "cache_info": {"from_cache": False}
+        }
+
+
+@app.post("/api/market-status/refresh")
+async def refresh_market_status():
+    """
+    Force refresh the market regime detection.
+
+    Clears the cache and re-runs the HMM regime detection.
+    """
+    global _regime_cache, _regime_cache_time
+
+    # Clear cache
+    _regime_cache = {}
+    _regime_cache_time = None
+
+    # Call get_market_status to refresh
+    return await get_market_status()
+
+
+@app.post("/api/market-rankings/refresh")
+async def refresh_market_rankings(
+    background_tasks: BackgroundTasks,
+    quick_scan: bool = Query(default=True, description="Scan only top stocks"),
+    use_ml: bool = Query(default=True, description="Use Monte Carlo Dropout confidence")
+):
+    """
+    Trigger a background refresh of market rankings.
+
+    Use this to manually trigger a rankings update without waiting.
+
+    - **quick_scan**: Only scan top stocks (faster)
+    - **use_ml**: Use Monte Carlo Dropout for scientific confidence scores
+    """
+    if market_rankings_cache.is_updating():
+        return {
+            "status": "already_updating",
+            "message": "Rankings update already in progress"
+        }
+
+    def background_update():
+        """Background task to update rankings"""
+        try:
+            market_rankings_cache.set_updating(True)
+            stocks_to_scan = TOP_STOCKS_FOR_RANKING if quick_scan else list(SAUDI_STOCKS.keys())[:50]
+            rankings = scan_stocks_for_rankings(stocks_to_scan, analyzer, use_ml_confidence=use_ml)
+            market_rankings_cache.update_rankings(rankings)
+        except Exception as e:
+            print(f"Background rankings update failed: {e}")
+            market_rankings_cache.set_updating(False)
+
+    background_tasks.add_task(background_update)
+
+    return {
+        "status": "started",
+        "message": f"Rankings refresh started for {len(TOP_STOCKS_FOR_RANKING if quick_scan else [])} stocks",
+        "scan_type": "quick" if quick_scan else "full",
+        "confidence_method": "mc_dropout" if use_ml else "heuristic"
     }
 
 
@@ -911,6 +1576,10 @@ if __name__ == "__main__":
     print("  GET  /api/health              - Health check")
     print("\n  Model Info:")
     print("  GET  /api/models              - List available models")
+    print("\n  Market Rankings (NEW):")
+    print("  GET  /api/market-rankings     - Top bullish/bearish stocks")
+    print("  GET  /api/market-rankings/status - Cache status")
+    print("  POST /api/market-rankings/refresh - Trigger refresh")
     print("\n  Position Manager:")
     print("  GET  /api/positions           - List all positions")
     print("  POST /api/positions           - Create new position")

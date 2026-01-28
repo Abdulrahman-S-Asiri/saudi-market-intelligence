@@ -54,9 +54,13 @@ class DataPreprocessor:
             df.columns = [col[0] if isinstance(col, tuple) else col for col in df.columns]
 
         # Check for column variations
+        # Note: Skip macro columns (Oil_Close, TASI_Close) to preserve them
         col_mapping = {}
         for col in df.columns:
             col_str = str(col)
+            # Skip macro columns - they should not be renamed
+            if col_str in ['Oil_Close', 'TASI_Close']:
+                continue
             if 'Date' in col_str or 'date' in col_str.lower():
                 col_mapping[col] = 'Date'
             elif 'Open' in col_str:
@@ -79,11 +83,23 @@ class DataPreprocessor:
         # Remove rows with any remaining NaN
         df = df.dropna()
 
-        # Ensure numeric types
-        numeric_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
+        # Ensure numeric types for standard columns
+        numeric_cols = ['Open', 'High', 'Low', 'Close', 'Volume', 'Oil_Close', 'TASI_Close']
         for col in numeric_cols:
             if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
+                # Check if column is a Series (not a DataFrame from duplicate columns)
+                col_data = df[col]
+                if isinstance(col_data, pd.DataFrame):
+                    # If it's a DataFrame, take the first column
+                    df[col] = col_data.iloc[:, 0]
+                    col_data = df[col]
+
+                # Skip if already numeric
+                if pd.api.types.is_numeric_dtype(col_data):
+                    continue
+
+                # Try to convert to numeric
+                df[col] = pd.to_numeric(col_data, errors='coerce')
 
         return df
 
@@ -613,6 +629,106 @@ class DataPreprocessor:
 
         return df
 
+    def add_macro_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Add macroeconomic features: Oil_Correlation and Market_Trend.
+
+        Prerequisites:
+            df must contain 'Oil_Close' and 'TASI_Close' columns
+            (from fetch_stock_with_macro or manually merged)
+
+        Features added:
+            - Oil_Correlation: Rolling 30-day correlation between Stock Close and Oil price
+            - Market_Trend: Rolling 14-day return of TASI index
+
+        Args:
+            df: DataFrame with stock data + Oil_Close + TASI_Close columns
+
+        Returns:
+            DataFrame with macro features added
+        """
+        df = df.copy()
+
+        # ===== OIL CORRELATION (30-day rolling) =====
+        if 'Oil_Close' in df.columns and df['Oil_Close'].notna().sum() > 30:
+            # Calculate rolling 30-day correlation between Stock Close and Oil Close
+            df['Oil_Correlation'] = (
+                df['Close']
+                .rolling(window=30, min_periods=15)
+                .corr(df['Oil_Close'])
+                .fillna(0)
+            )
+            # Clip extreme values
+            df['Oil_Correlation'] = df['Oil_Correlation'].clip(-1, 1)
+        else:
+            # Placeholder if Oil data not available
+            df['Oil_Correlation'] = 0
+            print("[INFO] Oil_Close not available, Oil_Correlation set to 0")
+
+        # ===== MARKET TREND (14-day rolling return of TASI) =====
+        if 'TASI_Close' in df.columns and df['TASI_Close'].notna().sum() > 14:
+            # Calculate 14-day rolling return of TASI
+            # (current TASI close / TASI close 14 days ago) - 1
+            df['Market_Trend'] = (
+                df['TASI_Close'].pct_change(periods=14).fillna(0)
+            )
+            # Clip extreme values (e.g., max 50% move in 14 days)
+            df['Market_Trend'] = df['Market_Trend'].clip(-0.5, 0.5)
+        else:
+            # Placeholder if TASI data not available
+            df['Market_Trend'] = 0
+            print("[INFO] TASI_Close not available, Market_Trend set to 0")
+
+        # ===== ADDITIONAL MACRO FEATURES =====
+
+        # Oil Momentum (5-day change in oil price)
+        if 'Oil_Close' in df.columns and df['Oil_Close'].notna().sum() > 5:
+            df['Oil_Momentum'] = df['Oil_Close'].pct_change(periods=5).fillna(0).clip(-0.3, 0.3)
+        else:
+            df['Oil_Momentum'] = 0
+
+        # Market Volatility (14-day rolling std of TASI returns)
+        if 'TASI_Close' in df.columns and df['TASI_Close'].notna().sum() > 14:
+            tasi_returns = df['TASI_Close'].pct_change().fillna(0)
+            df['Market_Volatility'] = (
+                tasi_returns.rolling(window=14, min_periods=7).std().fillna(0)
+            )
+            # Annualize for interpretability
+            df['Market_Volatility'] = df['Market_Volatility'] * np.sqrt(252)
+        else:
+            df['Market_Volatility'] = 0
+
+        # Stock-Market Beta (rolling 30-day covariance / market variance)
+        if 'TASI_Close' in df.columns and df['TASI_Close'].notna().sum() > 30:
+            stock_returns = df['Close'].pct_change().fillna(0)
+            market_returns = df['TASI_Close'].pct_change().fillna(0)
+
+            # Rolling covariance
+            rolling_cov = stock_returns.rolling(window=30, min_periods=15).cov(market_returns)
+            # Rolling market variance
+            rolling_var = market_returns.rolling(window=30, min_periods=15).var()
+
+            df['Stock_Market_Beta'] = (rolling_cov / (rolling_var + 1e-8)).fillna(1).clip(-3, 3)
+        else:
+            df['Stock_Market_Beta'] = 1
+
+        return df
+
+    def get_macro_feature_list(self) -> List[str]:
+        """
+        Get the list of macroeconomic features.
+
+        Returns:
+            List of macro feature names
+        """
+        return [
+            'Oil_Correlation',     # 30-day rolling correlation with Brent Oil
+            'Market_Trend',        # 14-day rolling return of TASI
+            'Oil_Momentum',        # 5-day change in oil price
+            'Market_Volatility',   # 14-day rolling std of TASI returns (annualized)
+            'Stock_Market_Beta',   # 30-day rolling beta vs TASI
+        ]
+
     def _add_statistical_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Add statistical features for better model performance.
@@ -653,14 +769,17 @@ class DataPreprocessor:
 
         return df
 
-    def get_advanced_feature_list(self) -> List[str]:
+    def get_advanced_feature_list(self, include_macro: bool = True) -> List[str]:
         """
         Get the list of all features for advanced LSTM model.
 
+        Args:
+            include_macro: Whether to include macroeconomic features
+
         Returns:
-            List of 35+ feature names
+            List of 40+ feature names (including macro features)
         """
-        return [
+        features = [
             # Basic OHLCV
             'Close', 'Volume', 'High', 'Low',
             # Moving Averages
@@ -686,6 +805,11 @@ class DataPreprocessor:
             # Cross-Asset
             'Rolling_Beta', 'Rolling_Alpha'
         ]
+
+        if include_macro:
+            features.extend(self.get_macro_feature_list())
+
+        return features
 
     def prepare_lstm_data(
         self,
@@ -863,13 +987,18 @@ class DataPreprocessor:
         return False
 
 
-def preprocess_stock_data(df: pd.DataFrame, include_advanced: bool = True) -> pd.DataFrame:
+def preprocess_stock_data(
+    df: pd.DataFrame,
+    include_advanced: bool = True,
+    include_macro: bool = True
+) -> pd.DataFrame:
     """
     Convenience function to preprocess stock data
 
     Args:
-        df: Raw stock DataFrame
+        df: Raw stock DataFrame (optionally with Oil_Close, TASI_Close columns)
         include_advanced: Whether to include advanced features (35+ features)
+        include_macro: Whether to include macroeconomic features
 
     Returns:
         Preprocessed DataFrame with technical indicators
@@ -881,22 +1010,27 @@ def preprocess_stock_data(df: pd.DataFrame, include_advanced: bool = True) -> pd
     if include_advanced:
         df = preprocessor.add_advanced_features(df)
 
+    if include_macro and ('Oil_Close' in df.columns or 'TASI_Close' in df.columns):
+        df = preprocessor.add_macro_features(df)
+
     return df
 
 
 def preprocess_for_advanced_lstm(
     df: pd.DataFrame,
-    tasi_data: pd.DataFrame = None
+    tasi_data: pd.DataFrame = None,
+    include_macro: bool = True
 ) -> Tuple[pd.DataFrame, DataPreprocessor]:
     """
     Preprocess stock data specifically for the Advanced LSTM model.
 
     This function applies all preprocessing steps including advanced features
-    optimized for the high-accuracy AdvancedStockLSTM model.
+    and macroeconomic features optimized for the high-accuracy AdvancedStockLSTM model.
 
     Args:
-        df: Raw stock DataFrame
+        df: Raw stock DataFrame (optionally with Oil_Close, TASI_Close columns)
         tasi_data: Optional TASI index data for relative strength features
+        include_macro: Whether to include macroeconomic features (default True)
 
     Returns:
         Tuple of (preprocessed DataFrame, DataPreprocessor instance)
@@ -915,6 +1049,10 @@ def preprocess_for_advanced_lstm(
     # Add cross-asset features if TASI data provided
     if tasi_data is not None:
         df = preprocessor._add_cross_asset_features(df, tasi_data)
+
+    # Add macroeconomic features if data is available
+    if include_macro and ('Oil_Close' in df.columns or 'TASI_Close' in df.columns):
+        df = preprocessor.add_macro_features(df)
 
     return df, preprocessor
 

@@ -82,11 +82,17 @@ body {
   top: 0;
   z-index: 100;
   display: flex;
+  flex-direction: column;
+  background: rgba(10, 10, 15, 0.95);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+}
+
+.header-top {
+  display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 16px 32px;
-  background: rgba(10, 10, 15, 0.9);
-  backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border);
 }
 
@@ -143,6 +149,109 @@ body {
   color: #000;
 }
 
+.status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+/* ===== STOCK SELECTOR SECTION ===== */
+.stock-selector-section {
+  padding: 12px 32px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Sector Chips */
+.sector-chips-container {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+
+.sector-chips-container::before,
+.sector-chips-container::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 40px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.sector-chips-container::before {
+  left: 0;
+  background: linear-gradient(to right, rgba(10, 10, 15, 1), transparent);
+}
+
+.sector-chips-container::after {
+  right: 0;
+  background: linear-gradient(to left, rgba(10, 10, 15, 1), transparent);
+}
+
+.sector-chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 8px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  scroll-behavior: smooth;
+}
+
+.sector-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.sector-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.sector-chip:hover {
+  background: var(--bg-hover);
+  border-color: rgba(0, 212, 255, 0.3);
+  color: var(--text);
+}
+
+.sector-chip.active {
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.2) 0%, rgba(138, 43, 226, 0.2) 100%);
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 15px rgba(0, 212, 255, 0.2);
+}
+
+.chip-icon {
+  font-size: 14px;
+}
+
+.chip-name {
+  font-size: 12px;
+}
+
+/* Stock Dropdown */
+.stock-dropdown-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .stock-select {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -152,8 +261,8 @@ body {
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  min-width: 200px;
-  transition: border-color 0.2s;
+  min-width: 280px;
+  transition: all 0.2s;
 }
 
 .stock-select:hover {
@@ -166,12 +275,19 @@ body {
   box-shadow: 0 0 0 3px var(--accent-glow);
 }
 
-.status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--text-dim);
+.stock-select option {
+  background: var(--bg-dark);
+  color: var(--text);
+  padding: 10px;
+}
+
+.stock-count {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 6px 12px;
+  background: var(--bg-hover);
+  border-radius: 12px;
+  white-space: nowrap;
 }
 
 .dot {
@@ -591,6 +707,11 @@ body {
   color: var(--accent);
 }
 
+/* ===== MARKET SCANNER SECTION ===== */
+.market-scanner-section {
+  margin-top: 24px;
+}
+
 /* ===== FOOTER ===== */
 .footer {
   padding: 24px;
@@ -642,15 +763,64 @@ body {
   }
 }
 
-@media (max-width: 640px) {
-  .header {
+@media (max-width: 768px) {
+  .header-top {
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 12px 16px;
+  }
+
+  .stock-selector-section {
+    padding: 12px 16px;
+  }
+
+  .sector-chips-container::before,
+  .sector-chips-container::after {
+    width: 20px;
+  }
+
+  .stock-dropdown-wrapper {
     flex-direction: column;
-    gap: 16px;
-    padding: 16px;
+    align-items: stretch;
+    gap: 8px;
   }
 
   .stock-select {
     width: 100%;
+    min-width: unset;
+  }
+
+  .stock-count {
+    text-align: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .header-top {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 12px 16px;
+  }
+
+  .header-top .logo {
+    justify-content: center;
+  }
+
+  .header-top .nav-tabs {
+    align-self: center;
+  }
+
+  .header-top .status {
+    justify-content: center;
+  }
+
+  .sector-chip {
+    padding: 6px 10px;
+  }
+
+  .chip-name {
+    font-size: 11px;
   }
 
   .main {

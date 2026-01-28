@@ -4,9 +4,12 @@
  * BiLSTM + Multi-Head Attention Model
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import './styles/App.css';
 import PositionManager from './components/PositionManager';
+import LandingPage from './components/LandingPage';
+import MarketScanner from './components/MarketScanner';
 import usePositions from './hooks/usePositions';
 
 const API_BASE = 'http://localhost:8000';
@@ -79,20 +82,89 @@ const MiniChart = ({ data }) => {
   );
 };
 
+// TASI Sector Configuration with icons
+const TASI_SECTORS = [
+  { id: 'all', name: 'All Sectors', icon: '📊' },
+  { id: 'Energy', name: 'Energy', icon: '⚡' },
+  { id: 'Materials', name: 'Materials', icon: '🏗️' },
+  { id: 'Banks', name: 'Banks', icon: '🏦' },
+  { id: 'Diversified Financials', name: 'Financials', icon: '💰' },
+  { id: 'Insurance', name: 'Insurance', icon: '🛡️' },
+  { id: 'Telecommunication Services', name: 'Telecom', icon: '📡' },
+  { id: 'Utilities', name: 'Utilities', icon: '💡' },
+  { id: 'Real Estate', name: 'Real Estate', icon: '🏢' },
+  { id: 'REITs', name: 'REITs', icon: '🏠' },
+  { id: 'Consumer Services', name: 'Consumer', icon: '🛒' },
+  { id: 'Food & Beverages', name: 'Food & Bev', icon: '🍽️' },
+  { id: 'Health Care', name: 'Healthcare', icon: '🏥' },
+  { id: 'Pharma', name: 'Pharma', icon: '💊' },
+  { id: 'Capital Goods', name: 'Industrial', icon: '🏭' },
+  { id: 'Transportation', name: 'Transport', icon: '🚚' },
+  { id: 'Software & Services', name: 'Tech', icon: '💻' },
+  { id: 'Consumer Durables', name: 'Durables', icon: '📦' },
+];
+
+// Sector Filter Chips Component
+const SectorChips = ({ sectors, selectedSector, onSelect }) => {
+  return (
+    <div className="sector-chips-container">
+      <div className="sector-chips">
+        {sectors.map(sector => (
+          <motion.button
+            key={sector.id}
+            className={`sector-chip ${selectedSector === sector.id ? 'active' : ''}`}
+            onClick={() => onSelect(sector.id)}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            <span className="chip-icon">{sector.icon}</span>
+            <span className="chip-name">{sector.name}</span>
+          </motion.button>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 // Main App Component
 function App() {
+  const [showLanding, setShowLanding] = useState(true);
   const [stocks, setStocks] = useState([
     { symbol: '2222', name: 'Saudi Aramco', sector: 'Energy' },
-    { symbol: '1120', name: 'Al Rajhi Bank', sector: 'Banking' },
-    { symbol: '2010', name: 'SABIC', sector: 'Chemicals' },
-    { symbol: '7010', name: 'STC', sector: 'Telecom' },
+    { symbol: '1120', name: 'Al Rajhi Bank', sector: 'Banks' },
+    { symbol: '2010', name: 'SABIC', sector: 'Materials' },
+    { symbol: '7010', name: 'STC', sector: 'Telecommunication Services' },
   ]);
   const [selectedStock, setSelectedStock] = useState('2222');
+  const [selectedSector, setSelectedSector] = useState('all');
   const [analysis, setAnalysis] = useState(null);
   const [chartData, setChartData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('analysis'); // 'analysis' or 'positions'
+  const [activeTab, setActiveTab] = useState('analysis'); // 'analysis', 'signals', or 'positions'
+
+  // Handle entering the main app from landing page
+  const handleEnterApp = useCallback(() => {
+    setShowLanding(false);
+  }, []);
+
+  // Filter stocks by selected sector
+  const filteredStocks = useMemo(() => {
+    if (selectedSector === 'all') return stocks;
+    return stocks.filter(stock => stock.sector === selectedSector);
+  }, [stocks, selectedSector]);
+
+  // Handle sector change
+  const handleSectorChange = useCallback((sectorId) => {
+    setSelectedSector(sectorId);
+    // If current stock is not in the new sector, select the first stock of that sector
+    if (sectorId !== 'all') {
+      const sectorStocks = stocks.filter(s => s.sector === sectorId);
+      if (sectorStocks.length > 0 && !sectorStocks.find(s => s.symbol === selectedStock)) {
+        setSelectedStock(sectorStocks[0].symbol);
+      }
+    }
+  }, [stocks, selectedStock]);
 
   // Position manager hook
   const { createFromSignal, fetchPositions } = usePositions(false);
@@ -142,56 +214,90 @@ function App() {
   const currentStock = stocks.find(s => s.symbol === selectedStock) || {};
   const priceChange = analysis?.performance?.total_return || 0;
 
+  // Show Landing Page
+  if (showLanding) {
+    return <LandingPage onEnter={handleEnterApp} />;
+  }
+
   return (
-    <div className="app">
+    <motion.div
+      className="app"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.6 }}
+    >
       {/* Background */}
       <div className="bg-gradient" />
       <div className="bg-grid" />
 
       {/* Header */}
       <header className="header">
-        <div className="logo">
-          <span className="logo-icon">📊</span>
-          <div>
-            <h1>TASI AI</h1>
-            <span className="logo-sub">BiLSTM + Attention v3.0</span>
+        <div className="header-top">
+          <div className="logo">
+            <span className="logo-icon">📊</span>
+            <div>
+              <h1>TASI AI</h1>
+              <span className="logo-sub">BiLSTM + Attention v3.0</span>
+            </div>
+          </div>
+
+          {/* Tab Navigation */}
+          <div className="nav-tabs">
+            <button
+              className={`nav-tab ${activeTab === 'analysis' ? 'active' : ''}`}
+              onClick={() => setActiveTab('analysis')}
+            >
+              Analysis
+            </button>
+            <button
+              className={`nav-tab ${activeTab === 'signals' ? 'active' : ''}`}
+              onClick={() => setActiveTab('signals')}
+            >
+              Signals
+            </button>
+            <button
+              className={`nav-tab ${activeTab === 'positions' ? 'active' : ''}`}
+              onClick={() => setActiveTab('positions')}
+            >
+              Positions
+            </button>
+          </div>
+
+          <div className="status">
+            <span className={`dot ${loading ? 'loading' : 'ready'}`} />
+            {loading ? 'Analyzing...' : 'Ready'}
           </div>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="nav-tabs">
-          <button
-            className={`nav-tab ${activeTab === 'analysis' ? 'active' : ''}`}
-            onClick={() => setActiveTab('analysis')}
-          >
-            Analysis
-          </button>
-          <button
-            className={`nav-tab ${activeTab === 'positions' ? 'active' : ''}`}
-            onClick={() => setActiveTab('positions')}
-          >
-            Positions
-          </button>
-        </div>
-
+        {/* Sector Filter & Stock Selector */}
         {activeTab === 'analysis' && (
-          <select
-            className="stock-select"
-            value={selectedStock}
-            onChange={(e) => setSelectedStock(e.target.value)}
-          >
-            {stocks.map(stock => (
-              <option key={stock.symbol} value={stock.symbol}>
-                {stock.symbol} - {stock.name}
-              </option>
-            ))}
-          </select>
-        )}
+          <div className="stock-selector-section">
+            {/* Sector Chips */}
+            <SectorChips
+              sectors={TASI_SECTORS}
+              selectedSector={selectedSector}
+              onSelect={handleSectorChange}
+            />
 
-        <div className="status">
-          <span className={`dot ${loading ? 'loading' : 'ready'}`} />
-          {loading ? 'Analyzing...' : 'Ready'}
-        </div>
+            {/* Stock Dropdown */}
+            <div className="stock-dropdown-wrapper">
+              <select
+                className="stock-select"
+                value={selectedStock}
+                onChange={(e) => setSelectedStock(e.target.value)}
+              >
+                {filteredStocks.map(stock => (
+                  <option key={stock.symbol} value={stock.symbol}>
+                    {stock.symbol} - {stock.name}
+                  </option>
+                ))}
+              </select>
+              <span className="stock-count">
+                {filteredStocks.length} stocks
+              </span>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* Main Content */}
@@ -199,6 +305,16 @@ function App() {
         {/* Positions Tab */}
         {activeTab === 'positions' && (
           <PositionManager stocks={stocks} />
+        )}
+
+        {/* Signals Tab */}
+        {activeTab === 'signals' && (
+          <MarketScanner
+            onStockSelect={(symbol) => {
+              setSelectedStock(symbol);
+              setActiveTab('analysis');
+            }}
+          />
         )}
 
         {/* Analysis Tab */}
@@ -335,6 +451,17 @@ function App() {
                 </div>
               </div>
             </section>
+
+            {/* Market Scanner - Actionable Insights */}
+            <section className="market-scanner-section">
+              <MarketScanner
+                onStockSelect={(symbol) => {
+                  setSelectedStock(symbol);
+                  // Scroll to top to see the new analysis
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+              />
+            </section>
           </>
         )}
       </main>
@@ -343,7 +470,7 @@ function App() {
       <footer className="footer">
         <p>TASI AI v3.0 • BiLSTM + Multi-Head Attention • 2026</p>
       </footer>
-    </div>
+    </motion.div>
   );
 }
 

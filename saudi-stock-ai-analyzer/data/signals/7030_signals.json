@@ -1,0 +1,90 @@
+[
+  {
+    "timestamp": "2026-01-28T10:55:59.523194",
+    "signal": "HOLD",
+    "confidence": 43.4,
+    "price": 10.930000305175781,
+    "indicators": {
+      "rsi": 74.7126915572315,
+      "macd": 0.08271129501305374,
+      "regime": "sideways"
+    }
+  },
+  {
+    "timestamp": "2026-01-28T10:56:43.425318",
+    "signal": "HOLD",
+    "confidence": 43.4,
+    "price": 10.920000076293945,
+    "indicators": {
+      "rsi": 73.86366345668256,
+      "macd": 0.08191355595695171,
+      "regime": "sideways"
+    }
+  },
+  {
+    "timestamp": "2026-01-28T14:16:17.018081",
+    "signal": "HOLD",
+    "confidence": 41.4,
+    "price": 11.079999923706055,
+    "indicators": {
+      "rsi": 79.5918466646685,
+      "macd": 0.09467707654823165,
+      "regime": "sideways"
+    }
+  },
+  {
+    "timestamp": "2026-01-28T14:22:07.643221",
+    "signal": "HOLD",
+    "confidence": 45.3,
+    "price": 11.0600004196167,
+    "indicators": {
+      "rsi": 79.16668736272305,
+      "macd": 0.0930816745126144,
+      "regime": "sideways"
+    }
+  },
+  {
+    "timestamp": "2026-01-28T14:28:47.907180",
+    "signal": "HOLD",
+    "confidence": 45.3,
+    "price": 11.039999961853027,
+    "indicators": {
+      "rsi": 78.7234150483787,
+      "macd": 0.09148619640041211,
+      "regime": "sideways"
+    }
+  },
+  {
+    "timestamp": "2026-01-28T15:05:18.980266",
+    "signal": "HOLD",
+    "confidence": 45.3,
+    "price": 11.039999961853027,
+    "indicators": {
+      "rsi": 78.7234150483787,
+      "macd": 0.09148619640041211,
+      "regime": "sideways"
+    }
+  },
+  {
+    "timestamp": "2026-01-28T15:12:12.002694",
+    "signal": "HOLD",
+    "confidence": 45.3,
+    "price": 11.050000190734863,
+    "indicators": {
+      "rsi": 78.94738427159847,
+      "macd": 0.09228393545651237,
+      "regime": "sideways"
+    }
+  },
+  {
+    "timestamp": "2026-01-28T15:33:36.590347",
+    "signal": "HOLD",
+    "confidence": 45.3,
+    "price": 11.0600004196167,
+    "indicators": {
+      "rsi": 79.16668736272305,
+      "macd": 0.0930816745126144,
+      "regime": "sideways"
+    }
+  }
+]

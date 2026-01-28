@@ -1,0 +1,90 @@
+[
+  {
+    "timestamp": "2026-01-28T10:55:59.013162",
+    "signal": "HOLD",
+    "confidence": 41.4,
+    "price": 70.4000015258789,
+    "indicators": {
+      "rsi": 82.12291598115752,
+      "macd": 1.3152381816348395,
+      "regime": "sideways"
+    }
+  },
+  {
+    "timestamp": "2026-01-28T10:56:43.032692",
+    "signal": "HOLD",
+    "confidence": 41.4,
+    "price": 70.3499984741211,
+    "indicators": {
+      "rsi": 81.6666497124566,
+      "macd": 1.3112493342011646,
+      "regime": "sideways"
+    }
+  },
+  {
+    "timestamp": "2026-01-28T14:16:16.559814",
+    "signal": "HOLD",
+    "confidence": 42.4,
+    "price": 71.0,
+    "indicators": {
+      "rsi": 85.0828822433972,
+      "macd": 1.3631013077755512,
+      "regime": "sideways"
+    }
+  },
+  {
+    "timestamp": "2026-01-28T14:22:07.280585",
+    "signal": "HOLD",
+    "confidence": 42.4,
+    "price": 71.05000305175781,
+    "indicators": {
+      "rsi": 85.16484944519202,
+      "macd": 1.3670901552092118,
+      "regime": "sideways"
+    }
+  },
+  {
+    "timestamp": "2026-01-28T14:28:47.481587",
+    "signal": "HOLD",
+    "confidence": 42.4,
+    "price": 71.0,
+    "indicators": {
+      "rsi": 85.0828822433972,
+      "macd": 1.3631013077755512,
+      "regime": "sideways"
+    }
+  },
+  {
+    "timestamp": "2026-01-28T15:05:18.607822",
+    "signal": "HOLD",
+    "confidence": 42.4,
+    "price": 70.94999694824219,
+    "indicators": {
+      "rsi": 85.0000042385561,
+      "macd": 1.3591124603418763,
+      "regime": "sideways"
+    }
+  },
+  {
+    "timestamp": "2026-01-28T15:12:11.552360",
+    "signal": "HOLD",
+    "confidence": 42.4,
+    "price": 71.0,
+    "indicators": {
+      "rsi": 85.0828822433972,
+      "macd": 1.3631013077755512,
+      "regime": "sideways"
+    }
+  },
+  {
+    "timestamp": "2026-01-28T15:33:36.096902",
+    "signal": "HOLD",
+    "confidence": 42.4,
+    "price": 71.3499984741211,
+    "indicators": {
+      "rsi": 85.63830477989994,
+      "macd": 1.3910214139732346,
+      "regime": "sideways"
+    }
+  }
+]
