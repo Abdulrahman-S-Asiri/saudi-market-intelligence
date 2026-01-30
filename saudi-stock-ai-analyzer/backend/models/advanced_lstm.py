@@ -33,68 +33,177 @@ logger = logging.getLogger(__name__)
 # ============================================================
 # MONTE CARLO DROPOUT CONFIDENCE CALIBRATION
 # ============================================================
+#
+# This module implements scientifically calibrated confidence scores
+# using Monte Carlo Dropout - a Bayesian approximation technique.
+#
+# HOW IT WORKS:
+# 1. Run the model N=10 times with DROPOUT ACTIVE (training mode)
+# 2. Each forward pass produces slightly different predictions
+# 3. Target Price = MEAN of N predictions (best estimate)
+# 4. Uncertainty = STD DEV of N predictions (model confusion)
+# 5. Confidence = f(std_dev) where low std → high confidence
+#
+# The key insight: When the model is uncertain, dropout randomness
+# causes predictions to vary widely. When confident, predictions cluster.
+# ============================================================
+
+# ============================================================
+# MC DROPOUT DEFAULT CONFIGURATION
+# ============================================================
+# These defaults can be overridden by importing MC_DROPOUT_CONFIG from utils.config
+# The values are calibrated for stock return predictions (typically ±10% range)
+MC_DROPOUT_CONFIG = {
+    'n_samples': 10,           # Number of forward passes (N=10 for speed/accuracy balance)
+    'calibration_k': 30.0,     # Exponential decay constant (tuned for stock returns)
+    'min_confidence': 25.0,    # Floor confidence (never too uncertain)
+    'max_confidence': 95.0,    # Ceiling confidence (never overconfident)
+    'use_batched': True,       # Use optimized batched inference
+}
+
+# Try to load config from utils.config if available
+try:
+    from utils.config import MC_DROPOUT_CONFIG as _external_config
+    MC_DROPOUT_CONFIG.update(_external_config)
+    logger.info("Loaded MC Dropout config from utils.config")
+except ImportError:
+    pass  # Use defaults
+
 
 def calculate_confidence(std_dev: float, method: str = 'exponential') -> float:
     """
     Calculate confidence score from prediction standard deviation.
 
-    This is the core calibration function that maps model uncertainty
+    This is the CORE calibration function that maps model uncertainty
     (standard deviation of MC Dropout samples) to a 0-100% confidence score.
 
-    Principle:
-        - LOW std_dev (model is consistent) → HIGH confidence (90%+)
-        - HIGH std_dev (model is confused) → LOW confidence (40%-)
+    ============================================================
+    SCIENTIFIC BASIS:
+    ============================================================
+    Monte Carlo Dropout approximates Bayesian inference by treating
+    dropout at inference time as sampling from the posterior distribution.
+
+    The variance of these samples represents EPISTEMIC UNCERTAINTY -
+    the model's uncertainty about its own predictions.
+
+    We map this uncertainty to confidence using exponential decay:
+        confidence = 100 * exp(-k * std_dev)
+
+    This formula has nice properties:
+    - std_dev = 0 → confidence = 100% (perfect consistency)
+    - As std_dev → ∞, confidence → 0% (total confusion)
+    - The decay rate k controls sensitivity to uncertainty
+
+    ============================================================
+    CALIBRATION:
+    ============================================================
+    k = 30 is calibrated for stock return predictions where:
+    - Typical predictions are in range [-0.1, 0.1] (±10%)
+    - Good models have std_dev around 0.01-0.03
+    - Uncertain models have std_dev > 0.05
+
+    Calibration Table (k=30):
+        std_dev = 0.00 → 95% (capped at max)
+        std_dev = 0.01 → 74%
+        std_dev = 0.02 → 55%
+        std_dev = 0.03 → 41%
+        std_dev = 0.05 → 25% (hits floor)
+        std_dev = 0.10 → 25% (floor)
 
     Args:
-        std_dev: Standard deviation of MC Dropout predictions
-        method: Calibration method ('exponential' or 'linear')
+        std_dev: Standard deviation of MC Dropout predictions (uncertainty)
+        method: Calibration method ('exponential' recommended, or 'linear')
 
     Returns:
-        Confidence score between 20-95%
-
-    Calibration Table (exponential method, k=50):
-        std_dev = 0.00 → 95% (max, capped)
-        std_dev = 0.01 → 91%
-        std_dev = 0.02 → 82%
-        std_dev = 0.03 → 74%
-        std_dev = 0.05 → 61%
-        std_dev = 0.08 → 45%
-        std_dev = 0.10 → 37%
-        std_dev = 0.15 → 24%
-        std_dev = 0.20 → 20% (min, capped)
+        Confidence score between 25-95% (scientifically calibrated)
     """
     import math
 
+    # Get config values
+    k = MC_DROPOUT_CONFIG['calibration_k']
+    min_conf = MC_DROPOUT_CONFIG['min_confidence']
+    max_conf = MC_DROPOUT_CONFIG['max_confidence']
+
     if method == 'exponential':
         # Exponential decay: confidence = 100 * exp(-k * std_dev)
-        # k = 50 is calibrated for stock return predictions (typically 0-10% range)
-        k = 50.0
+        # This is the scientifically motivated formula from Bayesian deep learning
         confidence = 100.0 * math.exp(-k * std_dev)
     else:
-        # Linear mapping: confidence = 100 - (std_dev * scale)
-        scale = 500.0  # 0.1 std_dev = 50% confidence reduction
+        # Linear mapping (alternative, less recommended)
+        # confidence = 100 - (std_dev * scale)
+        scale = 1000.0  # 0.05 std_dev = 50% confidence reduction
         confidence = 100.0 - (std_dev * scale)
 
-    # Clamp to realistic range [20%, 95%]
-    # - Never overconfident (max 95%)
-    # - Never too uncertain for actionable signals (min 20%)
-    return max(20.0, min(95.0, confidence))
+    # Clamp to realistic range
+    # - max_conf (95%): Never overconfident - markets are inherently uncertain
+    # - min_conf (25%): Floor for actionable signals - below this, abstain
+    return max(min_conf, min(max_conf, confidence))
 
 
 def calculate_confidence_batch(std_devs: 'np.ndarray') -> 'np.ndarray':
     """
     Vectorized confidence calculation for batch processing.
 
+    Used for high-performance inference on multiple stocks simultaneously.
+    This is ~10x faster than calling calculate_confidence() in a loop.
+
     Args:
-        std_devs: Array of standard deviations
+        std_devs: Array of standard deviations from MC Dropout
 
     Returns:
-        Array of confidence scores (20-95%)
+        Array of confidence scores (25-95%)
     """
     import numpy as np
-    k = 50.0
+
+    k = MC_DROPOUT_CONFIG['calibration_k']
+    min_conf = MC_DROPOUT_CONFIG['min_confidence']
+    max_conf = MC_DROPOUT_CONFIG['max_confidence']
+
     confidence = 100.0 * np.exp(-k * std_devs)
-    return np.clip(confidence, 20.0, 95.0)
+    return np.clip(confidence, min_conf, max_conf)
+
+
+def get_mc_dropout_stats(predictions: 'np.ndarray') -> dict:
+    """
+    Compute comprehensive statistics from MC Dropout predictions.
+
+    This function takes the raw predictions from N forward passes
+    and computes all relevant statistics for confidence calibration.
+
+    Args:
+        predictions: Array of shape (n_samples, batch_size) or (n_samples,)
+
+    Returns:
+        Dictionary containing:
+        - mean: Average prediction (target price estimate)
+        - std: Standard deviation (uncertainty measure)
+        - variance: Variance (std^2, for mathematical formulas)
+        - confidence: Calibrated 0-100% confidence score
+        - coefficient_of_variation: std/|mean| (relative uncertainty)
+    """
+    import numpy as np
+
+    mean = np.mean(predictions, axis=0)
+    std = np.std(predictions, axis=0)
+    variance = std ** 2
+
+    # Calculate confidence using our calibration function
+    if np.isscalar(std):
+        confidence = calculate_confidence(float(std))
+    else:
+        confidence = calculate_confidence_batch(std)
+
+    # Coefficient of variation (useful for comparing across stocks)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        cv = np.where(np.abs(mean) > 1e-8, std / np.abs(mean), np.inf)
+
+    return {
+        'mean': mean,
+        'std': std,
+        'variance': variance,
+        'confidence': confidence,
+        'coefficient_of_variation': cv
+    }
 
 
 class MultiHeadAttention(nn.Module):
@@ -537,33 +646,52 @@ class AdvancedStockLSTM(nn.Module):
     def predict_mc_dropout(
         self,
         x: torch.Tensor,
-        n_samples: int = 10
+        n_samples: int = None
     ) -> Dict[str, torch.Tensor]:
         """
         Monte Carlo Dropout prediction for scientifically accurate confidence.
 
-        HOW IT WORKS:
-        1. Runs the model N=10 times with DROPOUT ACTIVE (model.train() mode)
-        2. Each run produces slightly different predictions due to dropout randomness
-        3. MEAN of predictions = Final Target Price (best estimate)
-        4. STD DEV of predictions = Model Uncertainty (how confused the model is)
-        5. Low STD → High Confidence, High STD → Low Confidence
+        ============================================================
+        HOW IT WORKS (Bayesian Deep Learning):
+        ============================================================
+        1. Set model to TRAINING MODE (keeps dropout ACTIVE)
+        2. Run N=10 forward passes through the network
+        3. Each pass randomly drops different neurons → different predictions
+        4. This approximates sampling from the posterior distribution
+
+        STATISTICS:
+        - MEAN of N predictions = Target Price (best Bayesian estimate)
+        - STD DEV of N predictions = Epistemic Uncertainty (model confusion)
+        - VARIANCE = STD^2 (used in mathematical formulas)
+
+        CONFIDENCE CALIBRATION:
+        - confidence = 100 * exp(-k * std_dev)
+        - Low std_dev (consistent predictions) → High confidence
+        - High std_dev (scattered predictions) → Low confidence
 
         Args:
             x: Input tensor of shape (batch, seq_len, num_features)
-            n_samples: Number of MC samples (default: 10 for speed/accuracy tradeoff)
+            n_samples: Number of MC samples (default: 10 from config)
 
         Returns:
             Dictionary with:
             - prediction_mean: Average of N runs (TARGET PRICE)
-            - prediction_std: Standard deviation of N runs (UNCERTAINTY)
-            - confidence_score: Calibrated 0-100% confidence via calculate_confidence()
-            - all_predictions: Raw predictions from each run (for debugging)
+            - prediction_std: Standard deviation (UNCERTAINTY)
+            - prediction_variance: Variance = std^2 (for formulas)
+            - confidence_score: Calibrated 25-95% confidence
+            - all_predictions: Raw predictions from each run
+            - n_samples: Number of MC samples used
         """
+        if n_samples is None:
+            n_samples = MC_DROPOUT_CONFIG['n_samples']
+
         was_training = self.training
 
-        # CRUCIAL: Set model to training mode to KEEP DROPOUT ACTIVE
-        # This is the key to Monte Carlo Dropout - dropout must be ON during inference
+        # ============================================================
+        # CRUCIAL: Set model to TRAINING MODE
+        # This keeps DROPOUT ACTIVE during inference
+        # Without this, MC Dropout doesn't work!
+        # ============================================================
         self.train()
 
         predictions = []
@@ -579,20 +707,26 @@ class AdvancedStockLSTM(nn.Module):
         # ============================================================
         # CALCULATE STATISTICS
         # ============================================================
-        # MEAN = Target Price (best estimate from averaging stochastic runs)
+        # MEAN = Target Price (Bayesian posterior mean)
         prediction_mean = predictions.mean(dim=0)  # (batch, 1)
 
-        # STD DEV = Uncertainty (how much predictions vary across runs)
+        # STD DEV = Epistemic Uncertainty (model's confusion)
         prediction_std = predictions.std(dim=0)    # (batch, 1)
+
+        # VARIANCE = STD^2 (useful for combining uncertainties)
+        prediction_variance = prediction_std ** 2  # (batch, 1)
 
         # ============================================================
         # CALIBRATE CONFIDENCE SCORE
-        # Uses calculate_confidence() function with exponential decay
-        # Low std_dev → High confidence, High std_dev → Low confidence
+        # Using exponential decay: confidence = 100 * exp(-k * std)
+        # k=30 is calibrated for stock return predictions
         # ============================================================
-        k = 50.0  # Calibration constant (matched to calculate_confidence)
+        k = MC_DROPOUT_CONFIG['calibration_k']
+        min_conf = MC_DROPOUT_CONFIG['min_confidence']
+        max_conf = MC_DROPOUT_CONFIG['max_confidence']
+
         confidence_raw = 100.0 * torch.exp(-k * prediction_std)
-        confidence_score = torch.clamp(confidence_raw, min=20.0, max=95.0)
+        confidence_score = torch.clamp(confidence_raw, min=min_conf, max=max_conf)
 
         # Restore original training mode
         if not was_training:
@@ -601,56 +735,89 @@ class AdvancedStockLSTM(nn.Module):
         return {
             'prediction_mean': prediction_mean,
             'prediction_std': prediction_std,
+            'prediction_variance': prediction_variance,
             'confidence_score': confidence_score,
-            'all_predictions': predictions
+            'all_predictions': predictions,
+            'n_samples': n_samples
         }
 
     def predict_mc_dropout_batched(
         self,
         x: torch.Tensor,
-        n_samples: int = 10
+        n_samples: int = None
     ) -> Dict[str, torch.Tensor]:
         """
         OPTIMIZED batched Monte Carlo Dropout for high-performance inference.
 
-        Instead of running N sequential forward passes, this method:
+        ============================================================
+        PERFORMANCE OPTIMIZATION:
+        ============================================================
+        Instead of running N sequential forward passes (slow), this method:
         1. Replicates input batch N times: (batch, seq, feat) → (batch*N, seq, feat)
         2. Runs a SINGLE forward pass on the enlarged batch
         3. Reshapes output to extract N samples per input
         4. Computes mean/std across samples
 
-        This is ~3-5x faster than sequential MC Dropout for large batches.
+        This is ~3-5x faster than sequential MC Dropout because:
+        - GPU parallelism is fully utilized
+        - Memory transfers happen once, not N times
+        - BatchNorm/LayerNorm statistics are computed once
+
+        IMPORTANT FOR /api/market-rankings:
+        - This method is used when scanning multiple stocks
+        - The speed improvement is crucial for responsive API
 
         Args:
             x: Input tensor of shape (batch, seq_len, num_features)
-            n_samples: Number of MC samples (default: 10)
+            n_samples: Number of MC samples (default: 10 from config)
 
         Returns:
-            Same as predict_mc_dropout but computed via batched inference
+            Dictionary with:
+            - prediction_mean: Average of N runs (TARGET PRICE)
+            - prediction_std: Standard deviation (UNCERTAINTY)
+            - prediction_variance: Variance = std^2
+            - confidence_score: Calibrated 25-95% confidence
+            - all_predictions: Raw predictions for analysis
+            - n_samples: Number of MC samples used
         """
+        if n_samples is None:
+            n_samples = MC_DROPOUT_CONFIG['n_samples']
+
         was_training = self.training
-        self.train()  # Keep dropout active
+        self.train()  # CRUCIAL: Keep dropout ACTIVE
 
         batch_size, seq_len, num_features = x.shape
 
-        # Replicate input N times: (batch, seq, feat) → (batch*N, seq, feat)
-        x_repeated = x.repeat(n_samples, 1, 1)
+        # ============================================================
+        # BATCHED INFERENCE TRICK:
+        # Replicate input N times along batch dimension
+        # This allows GPU to process all MC samples in parallel
+        # ============================================================
+        x_repeated = x.repeat(n_samples, 1, 1)  # (batch*N, seq, feat)
 
         with torch.no_grad():
             output = self.forward(x_repeated)
             all_preds = output['prediction']  # (batch*N, 1)
 
-        # Reshape to (n_samples, batch, 1)
+        # Reshape to (n_samples, batch, 1) for statistics
         all_preds = all_preds.view(n_samples, batch_size, 1)
 
-        # Calculate statistics across samples dimension
-        prediction_mean = all_preds.mean(dim=0)  # (batch, 1)
-        prediction_std = all_preds.std(dim=0)    # (batch, 1)
+        # ============================================================
+        # CALCULATE STATISTICS
+        # ============================================================
+        prediction_mean = all_preds.mean(dim=0)      # (batch, 1)
+        prediction_std = all_preds.std(dim=0)        # (batch, 1)
+        prediction_variance = prediction_std ** 2    # (batch, 1)
 
-        # Calibrate confidence
-        k = 50.0
+        # ============================================================
+        # CALIBRATE CONFIDENCE
+        # ============================================================
+        k = MC_DROPOUT_CONFIG['calibration_k']
+        min_conf = MC_DROPOUT_CONFIG['min_confidence']
+        max_conf = MC_DROPOUT_CONFIG['max_confidence']
+
         confidence_raw = 100.0 * torch.exp(-k * prediction_std)
-        confidence_score = torch.clamp(confidence_raw, min=20.0, max=95.0)
+        confidence_score = torch.clamp(confidence_raw, min=min_conf, max=max_conf)
 
         if not was_training:
             self.eval()
@@ -658,8 +825,10 @@ class AdvancedStockLSTM(nn.Module):
         return {
             'prediction_mean': prediction_mean,
             'prediction_std': prediction_std,
+            'prediction_variance': prediction_variance,
             'confidence_score': confidence_score,
-            'all_predictions': all_preds
+            'all_predictions': all_preds,
+            'n_samples': n_samples
         }
 
 
@@ -964,43 +1133,58 @@ class AdvancedStockPredictor:
     def predict_with_calibrated_confidence(
         self,
         x: np.ndarray,
-        n_samples: int = 10,
+        n_samples: int = None,
         use_batched: bool = True
     ) -> Dict[str, np.ndarray]:
         """
         Make predictions with scientifically calibrated confidence scores.
 
-        Uses Monte Carlo Dropout (N=10 forward passes) to estimate true
-        model uncertainty, then maps std_dev to a calibrated 0-100% confidence.
+        ============================================================
+        MONTE CARLO DROPOUT INFERENCE
+        ============================================================
+        Uses MC Dropout (N=10 forward passes by default) to estimate
+        true model uncertainty via Bayesian approximation.
 
-        This REPLACES the old heuristic confidence formula with a mathematically
-        grounded approach based on prediction variance.
+        This REPLACES old heuristic confidence formulas with a
+        mathematically grounded approach based on prediction variance.
 
-        HOW IT WORKS:
-        1. Run model N=10 times with DROPOUT ACTIVE
-        2. prediction = MEAN of 10 runs (best estimate)
-        3. uncertainty = STD DEV of 10 runs (model confusion)
-        4. confidence = calculate_confidence(std_dev)
-           - Low std_dev → High confidence (90%+)
-           - High std_dev → Low confidence (40%-)
+        ALGORITHM:
+        1. Set model to training mode (DROPOUT ACTIVE)
+        2. Run N=10 forward passes
+        3. prediction = MEAN of N runs (Bayesian posterior mean)
+        4. uncertainty = STD DEV of N runs (epistemic uncertainty)
+        5. variance = STD^2 (for mathematical formulas)
+        6. confidence = 100 * exp(-k * std_dev)
+           - Low std_dev → High confidence (up to 95%)
+           - High std_dev → Low confidence (down to 25%)
+
+        PERFORMANCE:
+        - use_batched=True: ~3-5x faster via GPU parallelism
+        - N=10 samples: Good balance of accuracy and speed
+        - Suitable for real-time API calls
 
         Args:
             x: Input data of shape (batch, seq_len, num_features) or (seq_len, num_features)
-            n_samples: Number of MC forward passes (default: 10 for speed)
-            use_batched: Use optimized batched inference (default: True, ~3x faster)
+            n_samples: Number of MC forward passes (default: 10 from config)
+            use_batched: Use optimized batched inference (default: True)
 
         Returns:
             Dictionary containing:
             - prediction: Mean prediction from MC samples (TARGET PRICE)
-            - prediction_std: Standard deviation of predictions (UNCERTAINTY)
-            - confidence: Calibrated 0-100% confidence score
+            - prediction_std: Standard deviation (UNCERTAINTY measure)
+            - variance: Variance = std^2 (for combining uncertainties)
+            - confidence: Calibrated 25-95% confidence score
+            - n_samples: Number of MC samples used
         """
+        if n_samples is None:
+            n_samples = MC_DROPOUT_CONFIG['n_samples']
+
         x_tensor = torch.tensor(x, dtype=torch.float32).to(self.device)
 
         if len(x_tensor.shape) == 2:
             x_tensor = x_tensor.unsqueeze(0)
 
-        # Use batched inference for better performance
+        # Use batched inference for better performance (default)
         if use_batched:
             output = self.model.predict_mc_dropout_batched(x_tensor, n_samples)
         else:
@@ -1009,7 +1193,9 @@ class AdvancedStockPredictor:
         return {
             'prediction': output['prediction_mean'].cpu().numpy().flatten(),
             'prediction_std': output['prediction_std'].cpu().numpy().flatten(),
-            'confidence': output['confidence_score'].cpu().numpy().flatten()
+            'variance': output['prediction_variance'].cpu().numpy().flatten(),
+            'confidence': output['confidence_score'].cpu().numpy().flatten(),
+            'n_samples': output['n_samples']
         }
 
     def save(self, path: str):

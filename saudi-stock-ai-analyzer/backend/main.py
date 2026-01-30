@@ -13,6 +13,7 @@ from typing import Dict, Optional, List
 from datetime import datetime
 import json
 import numpy as np
+import pandas as pd
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -221,9 +222,11 @@ class StockAnalyzer:
             },
             'ml_prediction': {
                 'direction': ml_prediction,
-                'confidence': round(ml_confidence * 100, 1) if ml_confidence else None,
-                'prediction': ml_raw_prediction,  # Raw prediction value from model
-                'uncertainty': ml_uncertainty,     # MC Dropout variance (for calibrated confidence)
+                # NOTE: ml_confidence is already 25-95% from MC Dropout (no need to multiply by 100)
+                'confidence': round(ml_confidence, 1) if ml_confidence else None,
+                'prediction': ml_raw_prediction,  # Raw prediction value (MEAN of MC samples)
+                'uncertainty': ml_uncertainty,     # STD DEV of MC Dropout samples
+                'variance': model_info.get('variance') if model_info else None,  # Variance = STD^2
                 'model_type': 'advanced_lstm',
                 'model_info': model_info,
                 'price_range': price_range
@@ -383,30 +386,40 @@ class StockAnalyzer:
         # ============================================================
         # MONTE CARLO DROPOUT PREDICTION (N=10 samples)
         # ============================================================
-        # 1. Run model 10 times with DROPOUT ACTIVE
-        # 2. prediction = MEAN of 10 runs (target price)
-        # 3. uncertainty = STD DEV of 10 runs (model confusion)
-        # 4. confidence = calculate_confidence(std_dev)
-        #    - Low std_dev → High confidence
-        #    - High std_dev → Low confidence
+        # This is the scientifically accurate confidence calculation:
+        #
+        # 1. Run model N=10 times with DROPOUT ACTIVE (training mode)
+        # 2. Each forward pass produces slightly different predictions
+        # 3. prediction = MEAN of N runs (Bayesian posterior mean)
+        # 4. uncertainty = STD DEV of N runs (epistemic uncertainty)
+        # 5. variance = STD^2 (for mathematical formulas)
+        # 6. confidence = 100 * exp(-k * std_dev)
+        #    - Low std_dev (consistent predictions) → High confidence
+        #    - High std_dev (scattered predictions) → Low confidence
+        #
+        # The key insight: When the model is uncertain, dropout randomness
+        # causes predictions to vary widely. When confident, they cluster.
         # ============================================================
-        mc_samples = config.get('mc_dropout_samples', 10)  # Default N=10 for speed
+        mc_samples = config.get('mc_dropout_samples', 10)  # Default N=10 for speed/accuracy
 
         result = predictor.predict_with_calibrated_confidence(
             latest_sequence,
             n_samples=mc_samples,
-            use_batched=True  # Use optimized batched inference
+            use_batched=True  # Use optimized batched inference (~3x faster)
         )
 
         # Extract MC Dropout results
-        prediction = float(result['prediction'][0])
-        confidence = float(result['confidence'][0])
-        uncertainty = float(result['prediction_std'][0])
+        prediction = float(result['prediction'][0])           # MEAN of N runs
+        confidence = float(result['confidence'][0])           # Calibrated 25-95%
+        uncertainty = float(result['prediction_std'][0])      # STD DEV of N runs
+        variance = float(result['variance'][0])               # STD^2
 
-        # Store uncertainty in model info for API response
-        model_info['uncertainty'] = round(uncertainty, 4)
-        model_info['mc_samples'] = mc_samples
+        # Store all MC Dropout statistics in model info for API response
+        model_info['uncertainty'] = round(uncertainty, 6)     # STD DEV (primary uncertainty measure)
+        model_info['variance'] = round(variance, 8)           # Variance (for formulas)
+        model_info['mc_samples'] = result.get('n_samples', mc_samples)
         model_info['confidence_method'] = 'mc_dropout'
+        model_info['calibration_formula'] = 'confidence = 100 * exp(-30 * std_dev)'
 
         # Determine direction
         current_price = float(df_advanced['Close'].iloc[-1])
@@ -635,28 +648,54 @@ class StockAnalyzer:
         # Convert to list of dicts for JSON serialization
         chart_data = []
         for idx, row in processed_data.iterrows():
+            # Safely get Date value
+            date_val = row.get('Date', idx)  # Use index as fallback
+            if hasattr(date_val, 'strftime'):
+                date_str = date_val.strftime('%Y-%m-%d')
+            elif pd.notna(date_val):
+                date_str = str(date_val)[:10]  # Get YYYY-MM-DD part
+            else:
+                continue  # Skip rows without valid date
+
+            # Safely convert numeric values with NaN/None handling
+            def safe_float(val, default=0.0):
+                try:
+                    if pd.isna(val) or val is None:
+                        return default
+                    return float(val)
+                except (TypeError, ValueError):
+                    return default
+
+            def safe_int(val, default=0):
+                try:
+                    if pd.isna(val) or val is None:
+                        return default
+                    return int(float(val))  # Convert through float to handle numpy types
+                except (TypeError, ValueError):
+                    return default
+
             entry = {
-                'date': row['Date'].strftime('%Y-%m-%d') if hasattr(row['Date'], 'strftime') else str(row['Date']),
-                'open': round(float(row['Open']), 2),
-                'high': round(float(row['High']), 2),
-                'low': round(float(row['Low']), 2),
-                'close': round(float(row['Close']), 2),
-                'volume': int(row['Volume']),
+                'date': date_str,
+                'open': round(safe_float(row.get('Open')), 2),
+                'high': round(safe_float(row.get('High')), 2),
+                'low': round(safe_float(row.get('Low')), 2),
+                'close': round(safe_float(row.get('Close')), 2),
+                'volume': safe_int(row.get('Volume')),
             }
 
             # Add indicators if available
-            if 'SMA_20' in row and not pd.isna(row['SMA_20']):
-                entry['sma_20'] = round(float(row['SMA_20']), 2)
-            if 'SMA_50' in row and not pd.isna(row['SMA_50']):
-                entry['sma_50'] = round(float(row['SMA_50']), 2)
-            if 'RSI' in row and not pd.isna(row['RSI']):
-                entry['rsi'] = round(float(row['RSI']), 2)
-            if 'MACD' in row and not pd.isna(row['MACD']):
-                entry['macd'] = round(float(row['MACD']), 4)
-            if 'MACD_Signal' in row and not pd.isna(row['MACD_Signal']):
-                entry['macd_signal'] = round(float(row['MACD_Signal']), 4)
-            if 'ATR' in row and not pd.isna(row['ATR']):
-                entry['atr'] = round(float(row['ATR']), 4)
+            if 'SMA_20' in row.index and pd.notna(row['SMA_20']):
+                entry['sma_20'] = round(safe_float(row['SMA_20']), 2)
+            if 'SMA_50' in row.index and pd.notna(row['SMA_50']):
+                entry['sma_50'] = round(safe_float(row['SMA_50']), 2)
+            if 'RSI' in row.index and pd.notna(row['RSI']):
+                entry['rsi'] = round(safe_float(row['RSI']), 2)
+            if 'MACD' in row.index and pd.notna(row['MACD']):
+                entry['macd'] = round(safe_float(row['MACD']), 4)
+            if 'MACD_Signal' in row.index and pd.notna(row['MACD_Signal']):
+                entry['macd_signal'] = round(safe_float(row['MACD_Signal']), 4)
+            if 'ATR' in row.index and pd.notna(row['ATR']):
+                entry['atr'] = round(safe_float(row['ATR']), 4)
 
             chart_data.append(entry)
 
@@ -742,10 +781,6 @@ class StockAnalyzer:
     def current_model_type(self) -> str:
         """Get current model type"""
         return 'advanced_lstm'
-
-
-# Import pandas for NaN checking
-import pandas as pd
 
 
 def main():

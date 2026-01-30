@@ -195,9 +195,19 @@ class DataPreprocessor:
         df['Ichimoku_Senkou_B'] = ichimoku['senkou_b']
 
         # Drop NaN rows only for required indicators
-        required_cols = ['SMA_20', 'SMA_50', 'RSI', 'MACD', 'MACD_Signal', 'ATR']
+        # Use adaptive required columns based on data length to avoid dropping all rows
+        if len(df) >= 50:
+            required_cols = ['SMA_20', 'SMA_50', 'RSI', 'MACD', 'MACD_Signal', 'ATR']
+        elif len(df) >= 26:
+            # For shorter periods, don't require SMA_50
+            required_cols = ['SMA_20', 'RSI', 'MACD', 'MACD_Signal', 'ATR']
+        else:
+            # For very short periods, only require basic indicators
+            required_cols = ['RSI', 'ATR']
+
         available_required = [col for col in required_cols if col in df.columns]
-        df = df.dropna(subset=available_required)
+        if available_required:
+            df = df.dropna(subset=available_required)
 
         return df
 
@@ -849,6 +859,18 @@ class DataPreprocessor:
 
         # Extract feature data
         data = df[available_features].values
+
+        # CRITICAL FIX: Clean inf/nan values before scaling
+        # Replace inf with nan, then forward-fill, then backfill
+        data = np.where(np.isinf(data), np.nan, data)
+        # Convert to DataFrame for better nan handling
+        data_df = pd.DataFrame(data, columns=available_features)
+        data_df = data_df.ffill().bfill()  # Forward fill then backfill
+        # If still nan, fill with column mean
+        data_df = data_df.fillna(data_df.mean())
+        # If still nan (entire column was nan), fill with 0
+        data_df = data_df.fillna(0)
+        data = data_df.values
 
         # CRITICAL FIX: Split data BEFORE scaling
         train_size = int(len(data) * train_split)

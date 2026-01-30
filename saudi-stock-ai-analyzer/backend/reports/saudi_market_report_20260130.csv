@@ -1,0 +1,11 @@
+Ticker,Name,Sector,Close_Price,Pred_Price_5D,Exp_Return,Confidence,AI_Signal,Signal_Desc
+7010,STC,Telecommunication Services,44.4,110.71,149.34,8.2,HOLD,🟡 HOLD - High uncertainty
+1120,Al Rajhi Bank,Banks,107.2,227.79,112.49,11.3,HOLD,🟡 HOLD - High uncertainty
+1180,Al Inma Bank,Banks,44.86,79.2,76.54,4.7,HOLD,🟡 HOLD - High uncertainty
+1182,Saudi National Bank (SNB),Banks,11.23,18.81,67.53,4.5,HOLD,🟡 HOLD - High uncertainty
+4030,Bahri,Transportation,30.8,26.94,-12.53,3.7,SELL,🔴 SELL - Bearish signal
+2280,Almarai,Food & Beverages,44.1,-2.24,-105.08,11.5,SELL,🔴 SELL - Bearish signal
+2222,Saudi Aramco,Energy,25.8,-4.47,-117.34,3.0,SELL,🔴 SELL - Bearish signal
+1010,Riyad Bank,Banks,28.1,-14.26,-150.74,4.3,SELL,🔴 SELL - Bearish signal
+2310,Sipchem,Materials,15.32,-22.86,-249.24,3.4,SELL,🔴 SELL - Bearish signal
+2010,SABIC,Materials,56.85,-201.34,-454.15,7.0,SELL,🔴 SELL - Bearish signal

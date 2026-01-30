@@ -578,6 +578,10 @@ class AdvancedTrainer:
         if self.ema is not None:
             self.ema.restore()
 
+        # Handle empty validation set
+        if n_batches == 0:
+            return float('inf')  # Return high loss if no validation data
+
         return total_loss / n_batches
 
     def fit(
@@ -836,6 +840,653 @@ def create_data_loaders(
     return train_loader, val_loader
 
 
+class TFTTrainer:
+    """
+    Specialized Trainer for Temporal Fusion Transformer (TFT) Models.
+
+    Handles:
+    - Quantile predictions (multiple outputs)
+    - Trading-aware loss with Sharpe Ratio optimization
+    - Static and dynamic covariate inputs
+    - Interpretability extraction (attention weights, feature importance)
+    - Comprehensive metrics logging
+    """
+
+    def __init__(
+        self,
+        model: nn.Module,
+        optimizer: torch.optim.Optimizer = None,
+        device: str = None,
+        quantiles: List[float] = [0.1, 0.5, 0.9],
+        lambda_sharpe: float = 0.1,
+        lambda_sortino: float = 0.0,
+        lambda_mdd: float = 0.0,
+        use_ema: bool = True,
+        ema_decay: float = 0.999,
+        max_grad_norm: float = 1.0,
+        log_interval: int = 10
+    ):
+        """
+        Initialize TFT trainer.
+
+        Args:
+            model: TFT model to train
+            optimizer: Optimizer (default: AdamW with weight decay)
+            device: Device to train on
+            quantiles: Quantile levels for probabilistic prediction
+            lambda_sharpe: Weight for Sharpe ratio in loss
+            lambda_sortino: Weight for Sortino ratio in loss
+            lambda_mdd: Weight for max drawdown in loss
+            use_ema: Whether to use EMA of weights
+            ema_decay: EMA decay rate
+            max_grad_norm: Maximum gradient norm for clipping
+            log_interval: How often to log detailed metrics
+        """
+        # Import TradingAwareLoss - avoid circular import
+        from .loss_functions import TradingAwareLoss
+
+        self.model = model
+        self.device = device or ('cuda' if torch.cuda.is_available() else 'cpu')
+        self.model.to(self.device)
+
+        # Optimizer with layer-wise learning rates
+        self.optimizer = optimizer or self._create_optimizer()
+
+        # Loss function
+        self.criterion = TradingAwareLoss(
+            quantiles=quantiles,
+            lambda_sharpe=lambda_sharpe,
+            lambda_sortino=lambda_sortino,
+            lambda_mdd=lambda_mdd
+        )
+
+        self.quantiles = quantiles
+        self.max_grad_norm = max_grad_norm
+        self.log_interval = log_interval
+
+        # EMA for model weights
+        self.ema = ExponentialMovingAverage(model, decay=ema_decay) if use_ema else None
+
+        # Training history with extended metrics
+        self.history = {
+            'train_loss': [],
+            'val_loss': [],
+            'quantile_loss': [],
+            'sharpe_ratio': [],
+            'sortino_ratio': [],
+            'max_drawdown': [],
+            'directional_accuracy': [],
+            'win_rate': [],
+            'learning_rates': [],
+            'calibration_error': []
+        }
+
+        # Best metrics tracking
+        self.best_sharpe = float('-inf')
+        self.best_val_loss = float('inf')
+
+    def _create_optimizer(self) -> torch.optim.Optimizer:
+        """Create optimizer with layer-wise learning rates."""
+        # Different learning rates for different components
+        param_groups = []
+
+        # Check if model has named modules for layer-wise LR
+        base_lr = 0.0003
+
+        # Embedding layers (lower LR)
+        embedding_params = []
+        # Attention layers (standard LR)
+        attention_params = []
+        # Other layers (standard LR)
+        other_params = []
+
+        for name, param in self.model.named_parameters():
+            if not param.requires_grad:
+                continue
+
+            if 'embed' in name.lower():
+                embedding_params.append(param)
+            elif 'attention' in name.lower():
+                attention_params.append(param)
+            else:
+                other_params.append(param)
+
+        if embedding_params:
+            param_groups.append({'params': embedding_params, 'lr': base_lr * 0.5})
+        if attention_params:
+            param_groups.append({'params': attention_params, 'lr': base_lr})
+        if other_params:
+            param_groups.append({'params': other_params, 'lr': base_lr})
+
+        # Fallback if no groups found
+        if not param_groups:
+            param_groups = [{'params': self.model.parameters(), 'lr': base_lr}]
+
+        return torch.optim.AdamW(
+            param_groups,
+            weight_decay=0.01,
+            betas=(0.9, 0.98),
+            eps=1e-9
+        )
+
+    def train_epoch(
+        self,
+        train_loader: DataLoader,
+        scheduler=None,
+        epoch: int = 0
+    ) -> Tuple[float, dict]:
+        """
+        Train for one epoch.
+
+        Args:
+            train_loader: Training data loader
+            scheduler: Optional learning rate scheduler
+            epoch: Current epoch number
+
+        Returns:
+            Tuple of (average_loss, metrics_dict)
+        """
+        self.model.train()
+        total_loss = 0.0
+        n_batches = 0
+        epoch_metrics = {
+            'quantile_loss': 0.0,
+            'sharpe_ratio': 0.0,
+            'win_rate': 0.0,
+            'directional_accuracy': 0.0
+        }
+
+        for batch_idx, batch in enumerate(train_loader):
+            # Handle different batch formats
+            if isinstance(batch, (tuple, list)):
+                if len(batch) == 2:
+                    x, y = batch
+                    static_covariates = None
+                    actual_returns = None
+                elif len(batch) == 3:
+                    x, y, static_covariates = batch
+                    actual_returns = None
+                elif len(batch) >= 4:
+                    x, y, static_covariates, actual_returns = batch[:4]
+                else:
+                    x, y = batch[0], batch[1]
+                    static_covariates = None
+                    actual_returns = None
+            else:
+                x, y = batch, None
+                static_covariates = None
+                actual_returns = None
+
+            # Move to device
+            x = x.to(self.device).float()
+            if y is not None:
+                y = y.to(self.device).float()
+            if static_covariates is not None:
+                static_covariates = static_covariates.to(self.device)
+            if actual_returns is not None:
+                actual_returns = actual_returns.to(self.device).float()
+
+            # Forward pass
+            self.optimizer.zero_grad()
+
+            output = self.model(x, static_covariates=static_covariates)
+
+            # Get quantile predictions
+            if 'quantile_predictions' in output:
+                predictions = output['quantile_predictions']
+            elif 'prediction' in output:
+                # Single prediction - expand to quantiles
+                pred = output['prediction']
+                predictions = pred.unsqueeze(-1).repeat(1, len(self.quantiles))
+            else:
+                raise ValueError("Model output must contain 'quantile_predictions' or 'prediction'")
+
+            # Compute loss
+            loss, metrics = self.criterion(
+                predictions, y,
+                actual_returns=actual_returns
+            )
+
+            # Backward pass
+            loss.backward()
+
+            # Gradient clipping
+            torch.nn.utils.clip_grad_norm_(
+                self.model.parameters(),
+                self.max_grad_norm
+            )
+
+            self.optimizer.step()
+
+            # Update EMA
+            if self.ema is not None:
+                self.ema.update()
+
+            # Step scheduler if per-batch
+            if scheduler is not None and hasattr(scheduler, 'step_batch'):
+                scheduler.step()
+
+            # Accumulate metrics
+            total_loss += loss.item()
+            n_batches += 1
+
+            for key in epoch_metrics:
+                if key in metrics:
+                    epoch_metrics[key] += metrics.get(key, 0.0)
+                elif f'sharpe_{key}' in metrics:
+                    epoch_metrics[key] += metrics.get(f'sharpe_{key}', 0.0)
+
+            # Log progress
+            if batch_idx % self.log_interval == 0 and batch_idx > 0:
+                avg_loss = total_loss / n_batches
+                logger.debug(
+                    f"Epoch {epoch} [{batch_idx}/{len(train_loader)}] "
+                    f"Loss: {avg_loss:.4f}"
+                )
+
+        # Average metrics
+        avg_loss = total_loss / max(n_batches, 1)
+        for key in epoch_metrics:
+            epoch_metrics[key] /= max(n_batches, 1)
+
+        return avg_loss, epoch_metrics
+
+    def validate(
+        self,
+        val_loader: DataLoader,
+        compute_calibration: bool = True
+    ) -> Tuple[float, dict]:
+        """
+        Validate the model.
+
+        Args:
+            val_loader: Validation data loader
+            compute_calibration: Whether to compute calibration metrics
+
+        Returns:
+            Tuple of (average_loss, metrics_dict)
+        """
+        self.model.eval()
+
+        # Use EMA weights for validation
+        if self.ema is not None:
+            self.ema.apply_shadow()
+
+        total_loss = 0.0
+        n_batches = 0
+        val_metrics = {
+            'quantile_loss': 0.0,
+            'sharpe_ratio': 0.0,
+            'sortino_ratio': 0.0,
+            'max_drawdown': 0.0,
+            'win_rate': 0.0,
+            'directional_accuracy': 0.0
+        }
+
+        all_predictions = []
+        all_targets = []
+
+        with torch.no_grad():
+            for batch in val_loader:
+                # Handle different batch formats
+                if isinstance(batch, (tuple, list)):
+                    if len(batch) == 2:
+                        x, y = batch
+                        static_covariates = None
+                        actual_returns = None
+                    elif len(batch) == 3:
+                        x, y, static_covariates = batch
+                        actual_returns = None
+                    elif len(batch) >= 4:
+                        x, y, static_covariates, actual_returns = batch[:4]
+                    else:
+                        x, y = batch[0], batch[1]
+                        static_covariates = None
+                        actual_returns = None
+                else:
+                    x, y = batch, None
+                    static_covariates = None
+                    actual_returns = None
+
+                # Move to device
+                x = x.to(self.device).float()
+                if y is not None:
+                    y = y.to(self.device).float()
+                if static_covariates is not None:
+                    static_covariates = static_covariates.to(self.device)
+                if actual_returns is not None:
+                    actual_returns = actual_returns.to(self.device).float()
+
+                # Forward pass
+                output = self.model(x, static_covariates=static_covariates)
+
+                # Get predictions
+                if 'quantile_predictions' in output:
+                    predictions = output['quantile_predictions']
+                elif 'prediction' in output:
+                    pred = output['prediction']
+                    predictions = pred.unsqueeze(-1).repeat(1, len(self.quantiles))
+                else:
+                    continue
+
+                # Compute loss
+                loss, metrics = self.criterion(
+                    predictions, y,
+                    actual_returns=actual_returns
+                )
+
+                total_loss += loss.item()
+                n_batches += 1
+
+                # Accumulate metrics
+                for key in val_metrics:
+                    if key in metrics:
+                        val_metrics[key] += metrics.get(key, 0.0)
+                    elif f'sharpe_{key}' in metrics:
+                        val_metrics[key] += metrics.get(f'sharpe_{key}', 0.0)
+                    elif f'sortino_{key}' in metrics:
+                        val_metrics[key] += metrics.get(f'sortino_{key}', 0.0)
+                    elif f'mdd_{key}' in metrics:
+                        val_metrics[key] += metrics.get(f'mdd_{key}', 0.0)
+
+                # Collect for calibration
+                if compute_calibration:
+                    all_predictions.append(predictions.cpu())
+                    all_targets.append(y.cpu())
+
+        # Restore original weights
+        if self.ema is not None:
+            self.ema.restore()
+
+        # Handle empty validation
+        if n_batches == 0:
+            return float('inf'), val_metrics
+
+        # Average metrics
+        avg_loss = total_loss / n_batches
+        for key in val_metrics:
+            val_metrics[key] /= n_batches
+
+        # Compute calibration if requested
+        if compute_calibration and all_predictions:
+            all_preds = torch.cat(all_predictions, dim=0)
+            all_targs = torch.cat(all_targets, dim=0)
+            calibration = self.criterion.get_calibration_report(all_preds, all_targs)
+            val_metrics['calibration'] = calibration
+
+            # Average calibration error
+            cal_errors = [v['error'] for v in calibration.values()]
+            val_metrics['avg_calibration_error'] = sum(cal_errors) / len(cal_errors)
+
+        return avg_loss, val_metrics
+
+    def fit(
+        self,
+        train_loader: DataLoader,
+        val_loader: DataLoader,
+        epochs: int = 200,
+        patience: int = 30,
+        scheduler_type: str = 'cosine',
+        verbose: bool = True,
+        save_dir: str = None,
+        target_sharpe: float = None
+    ) -> Dict:
+        """
+        Full training loop for TFT with Sharpe optimization.
+
+        Args:
+            train_loader: Training data loader
+            val_loader: Validation data loader
+            epochs: Maximum epochs
+            patience: Early stopping patience
+            scheduler_type: LR scheduler type
+            verbose: Whether to print progress
+            save_dir: Directory to save checkpoints
+            target_sharpe: Optional target Sharpe ratio to reach
+
+        Returns:
+            Training history with all metrics
+        """
+        # Setup scheduler
+        if scheduler_type == 'cosine':
+            scheduler = CosineAnnealingWarmRestarts(
+                self.optimizer,
+                T_0=15,
+                T_mult=2,
+                eta_min=1e-7
+            )
+            step_per_batch = False
+        elif scheduler_type == 'onecycle':
+            scheduler = OneCycleLR(
+                self.optimizer,
+                max_lr=self.optimizer.param_groups[0]['lr'] * 10,
+                total_steps=epochs * len(train_loader)
+            )
+            scheduler.step_batch = True
+            step_per_batch = True
+        else:
+            scheduler = None
+            step_per_batch = False
+
+        # Setup early stopping
+        save_path = os.path.join(save_dir, 'best_tft_model.pt') if save_dir else None
+        early_stopping = EarlyStopping(
+            patience=patience,
+            restore_best=True,
+            save_path=save_path
+        )
+
+        # Create save directory
+        if save_dir:
+            os.makedirs(save_dir, exist_ok=True)
+
+        for epoch in range(epochs):
+            # Train
+            if step_per_batch:
+                train_loss, train_metrics = self.train_epoch(
+                    train_loader, scheduler, epoch
+                )
+            else:
+                train_loss, train_metrics = self.train_epoch(
+                    train_loader, None, epoch
+                )
+                if scheduler is not None:
+                    scheduler.step()
+
+            # Validate
+            val_loss, val_metrics = self.validate(val_loader)
+
+            # Record history
+            self.history['train_loss'].append(train_loss)
+            self.history['val_loss'].append(val_loss)
+            self.history['quantile_loss'].append(val_metrics.get('quantile_loss', 0))
+            self.history['sharpe_ratio'].append(val_metrics.get('sharpe_ratio', 0))
+            self.history['sortino_ratio'].append(val_metrics.get('sortino_ratio', 0))
+            self.history['max_drawdown'].append(val_metrics.get('max_drawdown', 0))
+            self.history['directional_accuracy'].append(
+                val_metrics.get('directional_accuracy', 0)
+            )
+            self.history['win_rate'].append(val_metrics.get('win_rate', 0))
+            self.history['learning_rates'].append(
+                self.optimizer.param_groups[0]['lr']
+            )
+            self.history['calibration_error'].append(
+                val_metrics.get('avg_calibration_error', 0)
+            )
+
+            # Track best Sharpe
+            current_sharpe = val_metrics.get('sharpe_ratio', float('-inf'))
+            if current_sharpe > self.best_sharpe:
+                self.best_sharpe = current_sharpe
+                if save_dir:
+                    torch.save(
+                        self.model.state_dict(),
+                        os.path.join(save_dir, 'best_sharpe_model.pt')
+                    )
+
+            # Logging
+            if verbose and epoch % 5 == 0:
+                logger.info(
+                    f"Epoch {epoch:3d} | "
+                    f"Train: {train_loss:.4f} | "
+                    f"Val: {val_loss:.4f} | "
+                    f"Sharpe: {current_sharpe:.3f} | "
+                    f"Sortino: {val_metrics.get('sortino_ratio', 0):.3f} | "
+                    f"MDD: {val_metrics.get('max_drawdown', 0):.2%} | "
+                    f"DirAcc: {val_metrics.get('directional_accuracy', 0):.2%} | "
+                    f"LR: {self.optimizer.param_groups[0]['lr']:.2e}"
+                )
+
+            # Check target Sharpe
+            if target_sharpe is not None and current_sharpe >= target_sharpe:
+                logger.info(
+                    f"Target Sharpe ratio {target_sharpe} reached at epoch {epoch}"
+                )
+                break
+
+            # Early stopping
+            if early_stopping(val_loss, self.model):
+                if verbose:
+                    logger.info(f"Early stopping at epoch {epoch}")
+                break
+
+        # Final summary
+        if verbose:
+            logger.info("=" * 60)
+            logger.info("Training Complete!")
+            logger.info(f"Best Validation Loss: {early_stopping.best_loss:.4f}")
+            logger.info(f"Best Sharpe Ratio: {self.best_sharpe:.3f}")
+            logger.info("=" * 60)
+
+        return self.history
+
+    def predict(
+        self,
+        x: np.ndarray,
+        static_covariates: Optional[np.ndarray] = None,
+        return_attention: bool = False
+    ) -> Dict:
+        """
+        Make predictions with uncertainty quantification.
+
+        Args:
+            x: Input features
+            static_covariates: Optional static features
+            return_attention: Whether to return attention weights
+
+        Returns:
+            Dictionary with predictions, confidence, and optionally attention
+        """
+        self.model.eval()
+
+        # Use EMA weights if available
+        if self.ema is not None:
+            self.ema.apply_shadow()
+
+        with torch.no_grad():
+            x_tensor = torch.tensor(x, dtype=torch.float32).to(self.device)
+
+            static_tensor = None
+            if static_covariates is not None:
+                static_tensor = torch.tensor(
+                    static_covariates, dtype=torch.long
+                ).to(self.device)
+
+            output = self.model(x_tensor, static_covariates=static_tensor)
+
+        # Restore original weights
+        if self.ema is not None:
+            self.ema.restore()
+
+        result = {}
+
+        # Extract predictions
+        if 'quantile_predictions' in output:
+            quantiles = output['quantile_predictions'].cpu().numpy()
+            result['quantile_predictions'] = quantiles
+
+            # Median as point prediction
+            median_idx = len(self.quantiles) // 2
+            result['prediction'] = quantiles[..., median_idx]
+
+            # Confidence from prediction interval width
+            if len(self.quantiles) >= 3:
+                interval_width = quantiles[..., -1] - quantiles[..., 0]
+                result['confidence'] = 1.0 / (1.0 + interval_width)
+                result['uncertainty'] = interval_width
+
+        if 'prediction' in output and 'prediction' not in result:
+            result['prediction'] = output['prediction'].cpu().numpy()
+
+        if 'confidence' in output and 'confidence' not in result:
+            result['confidence'] = output['confidence'].cpu().numpy()
+
+        # Attention weights for interpretability
+        if return_attention and 'attention_weights' in output:
+            result['attention_weights'] = output['attention_weights'].cpu().numpy()
+
+        if 'variable_importance' in output:
+            result['variable_importance'] = output['variable_importance'].cpu().numpy()
+
+        return result
+
+    def get_feature_importance(
+        self,
+        val_loader: DataLoader,
+        feature_names: List[str] = None
+    ) -> Dict[str, float]:
+        """
+        Compute feature importance from variable selection network.
+
+        Args:
+            val_loader: Validation data for computing importance
+            feature_names: Names of features
+
+        Returns:
+            Dictionary mapping feature names to importance scores
+        """
+        self.model.eval()
+
+        if self.ema is not None:
+            self.ema.apply_shadow()
+
+        importance_scores = None
+        n_samples = 0
+
+        with torch.no_grad():
+            for batch in val_loader:
+                if isinstance(batch, (tuple, list)):
+                    x = batch[0]
+                else:
+                    x = batch
+
+                x = x.to(self.device).float()
+                output = self.model(x)
+
+                if 'variable_importance' in output:
+                    vi = output['variable_importance'].cpu().numpy()
+                    if importance_scores is None:
+                        importance_scores = vi.sum(axis=0)
+                    else:
+                        importance_scores += vi.sum(axis=0)
+                    n_samples += vi.shape[0]
+
+        if self.ema is not None:
+            self.ema.restore()
+
+        if importance_scores is None:
+            return {}
+
+        # Normalize
+        importance_scores /= n_samples
+
+        # Create named dict
+        if feature_names is None:
+            feature_names = [f'feature_{i}' for i in range(len(importance_scores))]
+
+        return dict(zip(feature_names, importance_scores.tolist()))
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
@@ -878,3 +1529,74 @@ if __name__ == "__main__":
             break
 
     print("\nTraining Utilities Test: OK")
+
+    # Test TFTTrainer (basic structure test)
+    print("\n" + "=" * 60)
+    print("Testing TFT Trainer...")
+
+    # Create a simple mock TFT-like model for testing
+    class MockTFTModel(nn.Module):
+        def __init__(self, input_size=35, hidden_size=64, num_quantiles=3):
+            super().__init__()
+            self.lstm = nn.LSTM(input_size, hidden_size, batch_first=True)
+            self.fc = nn.Linear(hidden_size, num_quantiles)
+            self.num_quantiles = num_quantiles
+
+        def forward(self, x, static_covariates=None):
+            # x: (batch, seq_len, features)
+            lstm_out, _ = self.lstm(x)
+            # Use last timestep
+            last_hidden = lstm_out[:, -1, :]
+            quantile_preds = self.fc(last_hidden)
+            # Sort to ensure quantile order
+            quantile_preds = torch.sort(quantile_preds, dim=-1)[0]
+
+            return {
+                'quantile_predictions': quantile_preds,
+                'prediction': quantile_preds[:, 1]  # Median
+            }
+
+    # Create mock data
+    X_train = np.random.randn(100, 60, 35).astype(np.float32)
+    y_train = np.random.randn(100).astype(np.float32)
+    X_val = np.random.randn(20, 60, 35).astype(np.float32)
+    y_val = np.random.randn(20).astype(np.float32)
+
+    train_loader, val_loader = create_data_loaders(
+        X_train, y_train, X_val, y_val, batch_size=16
+    )
+
+    # Create model and trainer
+    mock_model = MockTFTModel()
+    tft_trainer = TFTTrainer(
+        model=mock_model,
+        quantiles=[0.1, 0.5, 0.9],
+        lambda_sharpe=0.1,
+        use_ema=True
+    )
+
+    # Test single epoch
+    print("Running single training epoch...")
+    train_loss, train_metrics = tft_trainer.train_epoch(train_loader, epoch=0)
+    print(f"  Train Loss: {train_loss:.4f}")
+    print(f"  Metrics: {train_metrics}")
+
+    # Test validation
+    print("\nRunning validation...")
+    val_loss, val_metrics = tft_trainer.validate(val_loader)
+    print(f"  Val Loss: {val_loss:.4f}")
+    print(f"  Sharpe Ratio: {val_metrics.get('sharpe_ratio', 'N/A')}")
+    if 'calibration' in val_metrics:
+        print(f"  Calibration: {val_metrics['calibration']}")
+
+    # Test prediction
+    print("\nRunning prediction...")
+    test_input = np.random.randn(5, 60, 35).astype(np.float32)
+    predictions = tft_trainer.predict(test_input)
+    print(f"  Prediction shape: {predictions['prediction'].shape}")
+    if 'quantile_predictions' in predictions:
+        print(f"  Quantile predictions shape: {predictions['quantile_predictions'].shape}")
+    if 'confidence' in predictions:
+        print(f"  Confidence range: [{predictions['confidence'].min():.3f}, {predictions['confidence'].max():.3f}]")
+
+    print("\nTFT Trainer Test: OK")

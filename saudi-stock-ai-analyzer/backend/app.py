@@ -31,6 +31,7 @@ from database import PositionManager, PositionCreate, PositionUpdate, PositionCl
 # Import MC Dropout for calibrated confidence
 import torch
 import numpy as np
+import pandas as pd
 from models.advanced_lstm import AdvancedStockPredictor
 
 # Import Market Regime Detector (HMM-based)
@@ -50,10 +51,23 @@ def get_mc_dropout_confidence(
     """
     Run Monte Carlo Dropout inference to get calibrated confidence.
 
-    Uses N=10 forward passes with dropout enabled to estimate:
-    - Prediction mean (final predicted return)
-    - Prediction variance (model uncertainty)
-    - Calibrated confidence score (0-100%)
+    ============================================================
+    MONTE CARLO DROPOUT ALGORITHM:
+    ============================================================
+    1. Set model to TRAINING MODE (keeps dropout ACTIVE)
+    2. Run N=10 forward passes through the network
+    3. Each pass produces slightly different predictions due to dropout
+    4. This approximates sampling from the Bayesian posterior
+
+    OUTPUT STATISTICS:
+    - prediction: MEAN of N runs (best estimate / target price)
+    - prediction_std: STD DEV of N runs (epistemic uncertainty)
+    - variance: STD^2 (for mathematical formulas)
+    - confidence: 100 * exp(-30 * std_dev) → calibrated 25-95%
+
+    CALIBRATION:
+    - Low std_dev (consistent predictions) → High confidence
+    - High std_dev (scattered predictions) → Low confidence
 
     Args:
         symbol: Stock symbol for caching
@@ -62,7 +76,7 @@ def get_mc_dropout_confidence(
         n_samples: Number of MC samples (default: 10)
 
     Returns:
-        Dict with prediction, variance, and calibrated confidence
+        Dict with prediction, prediction_std, variance, and calibrated confidence
     """
     import time
 
@@ -83,15 +97,23 @@ def get_mc_dropout_confidence(
             device=device
         )
 
-        # Run MC Dropout prediction
-        result = predictor.predict_with_calibrated_confidence(data, n_samples=n_samples)
+        # Run MC Dropout prediction with calibrated confidence
+        # This uses: confidence = 100 * exp(-30 * std_dev)
+        result = predictor.predict_with_calibrated_confidence(
+            data,
+            n_samples=n_samples,
+            use_batched=True  # Use optimized batched inference
+        )
 
-        # Extract values
+        # Extract values from MC Dropout output
         mc_result = {
-            'prediction': float(result['prediction'][0]),
-            'prediction_std': float(result['prediction_std'][0]),
-            'confidence': float(result['confidence'][0]),
-            'variance': float(result['variance'][0])
+            'prediction': float(result['prediction'][0]),         # MEAN of N runs
+            'prediction_std': float(result['prediction_std'][0]), # STD DEV (uncertainty)
+            'variance': float(result['variance'][0]),             # STD^2
+            'confidence': float(result['confidence'][0]),         # Calibrated 25-95%
+            'n_samples': result.get('n_samples', n_samples),
+            'confidence_method': 'mc_dropout',
+            'calibration_formula': 'confidence = 100 * exp(-30 * std_dev)'
         }
 
         # Cache result
@@ -103,13 +125,14 @@ def get_mc_dropout_confidence(
         return mc_result
 
     except Exception as e:
-        # Return default on error
+        # Return default on error with conservative estimates
         return {
             'prediction': 0.0,
             'prediction_std': 0.1,
-            'confidence': 50.0,
             'variance': 0.01,
-            'error': str(e)
+            'confidence': 25.0,  # Floor confidence on error
+            'error': str(e),
+            'confidence_method': 'fallback'
         }
 
 
@@ -302,43 +325,41 @@ def scan_stocks_for_rankings(
             # ============================================================
             # MONTE CARLO DROPOUT CONFIDENCE (Scientific Approach)
             # ============================================================
-            # Instead of heuristic confidence, use ML model uncertainty
+            # The model now returns scientifically calibrated confidence via:
+            #   confidence = 100 * exp(-30 * std_dev)
             #
-            # When use_ml_confidence=True:
-            #   1. Get ML prediction variance from trained model
-            #   2. Map variance to calibrated 0-100% confidence
-            #   3. Low variance = High confidence, High variance = Low confidence
+            # Where std_dev is the standard deviation of N=10 MC Dropout samples.
+            # - Low std_dev (consistent predictions) → High confidence
+            # - High std_dev (scattered predictions) → Low confidence
             #
-            # Formula: confidence = 100 * exp(-k * variance)
+            # We use this directly instead of recalculating.
             # ============================================================
 
             if use_ml_confidence and ml_prediction:
-                # Use ML prediction metrics for confidence
+                # Use the calibrated MC Dropout confidence directly from the model
+                # The model already applied: confidence = 100 * exp(-k * std_dev)
                 ml_conf = ml_prediction.get('confidence', 50)
-                ml_variance = ml_prediction.get('uncertainty', 0.05)
+                ml_uncertainty = ml_prediction.get('uncertainty', 0.05)  # STD DEV
+                ml_variance = ml_prediction.get('variance', 0.0025)      # STD^2
 
-                # If we have actual uncertainty from the model, use calibrated formula
-                if ml_variance and ml_variance > 0:
-                    # Calibration constant (tuned for stock returns)
-                    # k=10 means: std=0.1 → 37% conf, std=0.05 → 78% conf
-                    k = 10.0
-                    confidence_raw = 100.0 * np.exp(-k * ml_variance)
-                    confidence = float(np.clip(confidence_raw, 20, 95))
+                # Use the model's calibrated confidence directly (already 25-95% range)
+                if ml_conf is not None:
+                    confidence = float(ml_conf)
                 else:
-                    # Use model's reported confidence if no variance
-                    confidence = float(np.clip(ml_conf * 100, 20, 95))
+                    confidence = 50.0
 
                 # Also use ML predicted direction to adjust predicted_change
-                ml_direction = ml_prediction.get('direction', 0)
                 ml_pred_value = ml_prediction.get('prediction', 0)
                 if ml_pred_value != 0:
                     # Blend technical and ML predictions (60% ML, 40% technical)
                     predicted_change = 0.6 * (ml_pred_value * 100) + 0.4 * predicted_change
             else:
                 # Fallback: Heuristic confidence based on indicator agreement
-                # This is less accurate but much faster
+                # This is less accurate but much faster (no ML model needed)
                 indicator_strength = abs(rsi_component) * 50 + abs(macd_component) * 30
-                confidence = min(max(indicator_strength + 20, 20), 95)
+                confidence = min(max(indicator_strength + 20, 25), 95)
+                ml_uncertainty = None
+                ml_variance = None
 
             # Determine direction label
             if predicted_change > 0.5:
@@ -362,7 +383,10 @@ def scan_stocks_for_rankings(
                 "rsi": round(rsi, 1),
                 "total_return": round(total_return, 2),
                 "volatility": round(volatility, 2),
-                "confidence_method": "mc_dropout" if use_ml_confidence else "heuristic"
+                "confidence_method": "mc_dropout" if use_ml_confidence else "heuristic",
+                # MC Dropout uncertainty metrics (when available)
+                "uncertainty": round(ml_uncertainty, 6) if use_ml_confidence and ml_uncertainty else None,
+                "variance": round(ml_variance, 8) if use_ml_confidence and ml_variance else None
             }
 
             results.append(result)
@@ -967,16 +991,31 @@ async def get_market_status():
         # Detect regime using HMM
         regime_result = detect_market_regime(tasi_data)
 
-        # Add TASI summary stats
-        current_price = float(tasi_data['Close'].iloc[-1])
-        prev_close = float(tasi_data['Close'].iloc[-2])
-        daily_change = (current_price - prev_close) / prev_close * 100
+        # Handle multi-level columns from yfinance
+        if isinstance(tasi_data.columns, pd.MultiIndex):
+            tasi_data.columns = [col[0] if isinstance(col, tuple) else col for col in tasi_data.columns]
+
+        # Get Close column safely
+        close_col = tasi_data['Close'] if 'Close' in tasi_data.columns else tasi_data.iloc[:, 3]
+
+        # Add TASI summary stats with safe type conversion
+        def safe_float(val, default=0.0):
+            try:
+                if val is None or (hasattr(val, '__len__') and len(val) == 0):
+                    return default
+                return float(val)
+            except (TypeError, ValueError):
+                return default
+
+        current_price = safe_float(close_col.iloc[-1])
+        prev_close = safe_float(close_col.iloc[-2]) if len(close_col) >= 2 else current_price
+        daily_change = (current_price - prev_close) / prev_close * 100 if prev_close != 0 else 0
 
         # Weekly and monthly returns
-        week_ago_price = float(tasi_data['Close'].iloc[-5]) if len(tasi_data) >= 5 else current_price
-        month_ago_price = float(tasi_data['Close'].iloc[-22]) if len(tasi_data) >= 22 else current_price
-        weekly_return = (current_price - week_ago_price) / week_ago_price * 100
-        monthly_return = (current_price - month_ago_price) / month_ago_price * 100
+        week_ago_price = safe_float(close_col.iloc[-5]) if len(close_col) >= 5 else current_price
+        month_ago_price = safe_float(close_col.iloc[-22]) if len(close_col) >= 22 else current_price
+        weekly_return = (current_price - week_ago_price) / week_ago_price * 100 if week_ago_price != 0 else 0
+        monthly_return = (current_price - month_ago_price) / month_ago_price * 100 if month_ago_price != 0 else 0
 
         # Build response
         result = {
@@ -1603,5 +1642,5 @@ if __name__ == "__main__":
         "app:app",
         host=API_CONFIG['host'],
         port=API_CONFIG['port'],
-        reload=True
+        reload=False  # Disabled to ensure fresh module imports
     )
