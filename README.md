@@ -1,215 +1,190 @@
-# Saudi Stock AI Analyzer
+<div align="center">
 
-A full-stack AI-powered stock analysis platform for the Saudi Arabian market (Tadawul). Combines deep learning models with technical analysis to generate trading signals and insights.
+# 🇸🇦 TASI AI Analyzer
 
-## Features
+### Institutional-Grade Analysis for the Saudi Stock Market
 
-- **AI-Powered Predictions**: Ensemble model combining LSTM neural networks with XGBoost for accurate price direction forecasting
-- **Technical Analysis**: Comprehensive indicators including RSI, MACD, Bollinger Bands, ADX, and more
-- **Trading Signals**: Automated BUY/SELL/HOLD recommendations with confidence scores
-- **Risk Management**: Stop-loss and take-profit calculations based on ATR
-- **Backtesting Engine**: Historical performance evaluation with detailed metrics
-- **Real-Time Dashboard**: Modern React frontend with interactive charts
-- **REST API**: FastAPI backend with comprehensive endpoints
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Stack: FastAPI/React](https://img.shields.io/badge/Stack-FastAPI%20%7C%20React-blue.svg)](#tech-stack)
+[![Methodology: Vibe Coding](https://img.shields.io/badge/Methodology-Vibe%20Coding-purple.svg)](#-built-via-vibe-coding)
 
-## Tech Stack
+<br />
 
-### Backend
-- **Python 3.10+**
-- **FastAPI** - Modern async web framework
-- **PyTorch** - Deep learning models (LSTM with attention)
-- **scikit-learn** - Data preprocessing and metrics
-- **XGBoost** - Gradient boosting for ensemble predictions
-- **yfinance** - Market data from Yahoo Finance
-- **pandas/numpy** - Data manipulation
+**Real-time AI predictions • Uncertainty quantification • Market regime detection**
 
-### Frontend
-- **React 18** - UI framework
-- **Recharts** - Charting library
-- **Lightweight Charts** - TradingView-style candlestick charts
-- **Framer Motion** - Animations
-- **Axios** - HTTP client
+[Features](#-key-features) • [Installation](#-installation) • [Usage](#-usage) • [API](#-api-endpoints) • [License](#-license)
 
-## Installation
+</div>
 
-### Prerequisites
-- Python 3.10 or higher
-- Node.js 18 or higher
-- pip and npm
+---
 
-### Backend Setup
+## 🎯 Built via Vibe Coding
+
+> **This project demonstrates the power of Vibe Coding** — a methodology that leverages high-bandwidth human-AI collaboration to engineer complex, production-ready systems rapidly.
+
+Rather than traditional line-by-line coding, Vibe Coding focuses on:
+
+- 🧠 **Intent-driven development** — Describe what you want, not how to build it
+- ⚡ **Rapid iteration** — From concept to production in hours, not weeks
+- 🔄 **Continuous refinement** — Human creativity + AI execution in tight feedback loops
+- 🏗️ **Full-stack delivery** — Complete systems, not just snippets
+
+This entire platform — backend, frontend, ML models, and infrastructure — was engineered through Vibe Coding, showcasing what's possible when humans and AI collaborate at maximum bandwidth.
+
+---
+
+## ✨ Key Features
+
+### 🤖 **Real-time LSTM & Transformer Predictions**
+Advanced BiLSTM architecture with Multi-Head Attention mechanisms, trained on 35+ technical indicators for high-accuracy directional forecasting.
+
+### 📊 **Monte Carlo Dropout for True Uncertainty Estimation**
+Go beyond point predictions. Our MC Dropout implementation provides calibrated confidence intervals, so you know *how certain* the model is about each prediction.
+
+### 📈 **Market Regime Detection (Bull/Bear/Sideways)**
+Hidden Markov Model-based regime classification using the TASI Index. Automatically adapts trading strategies to current market conditions.
+
+### 🎨 **Interactive React Dashboard**
+Beautiful, responsive UI with real-time candlestick charts, technical indicators, signal history, and position management — all powered by TradingView's Lightweight Charts.
+
+### 🛡️ **Comprehensive Risk Metrics**
+Sharpe Ratio, Sortino Ratio, Maximum Drawdown, Value at Risk (VaR), Expected Shortfall — institutional-grade risk analytics at your fingertips.
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Technologies |
+|-------|--------------|
+| **Backend** | Python 3.10+, FastAPI, PyTorch, scikit-learn |
+| **Frontend** | React 18, Lightweight Charts, Framer Motion |
+| **ML Models** | BiLSTM, Multi-Head Attention, HMM, XGBoost |
+| **Data** | yfinance, pandas, numpy |
+
+---
+
+## 📦 Installation
+
+### Option 1: Docker (Recommended)
 
 ```bash
-cd saudi-stock-ai-analyzer
+# Clone the repository
+git clone https://github.com/Abdulrahman-S-Asiri/saudi-market-intelligence.git
+cd saudi-market-intelligence/saudi-stock-ai-analyzer
 
-# Create virtual environment (recommended)
+# Start all services
+docker-compose up
+```
+
+The application will be available at:
+- **Frontend:** http://localhost:3000
+- **Backend API:** http://localhost:8000
+- **API Docs:** http://localhost:8000/docs
+
+### Option 2: Manual Installation
+
+**Backend Setup:**
+```bash
+cd saudi-stock-ai-analyzer/backend
+
+# Create virtual environment
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
-```
 
-### Frontend Setup
-
-```bash
-cd frontend
-
-# Install dependencies
-npm install
-```
-
-## Usage
-
-### Running the Backend
-
-```bash
-# From saudi-stock-ai-analyzer directory
+# Start the server
 python app.py
 ```
 
-The API will be available at `http://localhost:8000`
-
-### Running the Frontend
-
+**Frontend Setup:**
 ```bash
-# From frontend directory
+cd saudi-stock-ai-analyzer/frontend
+
+# Install dependencies
+npm install
+
+# Start the development server
 npm start
 ```
 
-The dashboard will open at `http://localhost:3000`
+### Quick Start (Windows)
 
-### Running Both (Development)
+Simply double-click `start.bat` to launch both servers automatically.
 
-Terminal 1:
-```bash
-cd saudi-stock-ai-analyzer && python app.py
-```
+---
 
-Terminal 2:
-```bash
-cd saudi-stock-ai-analyzer/frontend && npm start
-```
+## 🚀 Usage
 
-## API Endpoints
+1. **Select a Stock** — Choose from 200+ TASI-listed stocks across 21 sectors
+2. **View Analysis** — Real-time AI predictions with confidence scores
+3. **Check Signals** — BUY/SELL/HOLD recommendations with technical justification
+4. **Monitor Regime** — See current market conditions (Bull/Bear/Sideways)
+5. **Track Positions** — Manage your portfolio with built-in position tracking
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/stocks` | GET | List available Saudi stocks |
-| `/api/analyze/{symbol}` | GET | Full stock analysis with ML prediction |
-| `/api/chart/{symbol}` | GET | OHLCV data with technical indicators |
-| `/api/predict/{symbol}` | GET | ML prediction only |
-| `/api/backtest/{symbol}` | GET | Historical backtest results |
-| `/api/signals/history/{symbol}` | GET | Past trading signals |
-| `/api/compare` | GET | Compare multiple stocks |
-| `/api/risk/{symbol}` | GET | Risk metrics (VaR, Sharpe, etc.) |
-| `/api/health` | GET | API health check |
+---
 
-### Example API Call
+## 📡 API Endpoints
 
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/stocks` | List all available stocks |
+| `GET /api/analyze/{symbol}` | Full analysis with ML prediction |
+| `GET /api/chart/{symbol}` | OHLCV data with indicators |
+| `GET /api/predict/{symbol}` | ML prediction with uncertainty |
+| `GET /api/regime` | Current market regime |
+| `GET /api/scanner` | Top gainers/losers scan |
+
+**Example:**
 ```bash
 curl http://localhost:8000/api/analyze/2222?period=6mo
 ```
 
-## Project Structure
+---
+
+## 📁 Project Structure
 
 ```
 saudi-stock-ai-analyzer/
-├── app.py                 # FastAPI server
-├── main.py                # Analysis orchestrator
-├── requirements.txt       # Python dependencies
+├── backend/
+│   ├── app.py              # FastAPI server
+│   ├── main.py             # Analysis orchestrator
+│   ├── models/             # LSTM, Attention, HMM
+│   ├── data/               # Data loading & preprocessing
+│   ├── strategy/           # Trading signals & risk
+│   ├── backtest/           # Historical validation
+│   └── utils/              # Config & utilities
 │
-├── data/
-│   ├── data_loader.py     # Yahoo Finance data fetching
-│   ├── data_collector.py  # Data collection utilities
-│   └── data_preprocessor.py # Feature engineering
+├── frontend/
+│   ├── src/
+│   │   ├── components/     # React components
+│   │   ├── hooks/          # Custom hooks
+│   │   └── styles/         # CSS styles
+│   └── public/
 │
-├── models/
-│   ├── lstm_model.py      # LSTM with attention mechanism
-│   ├── transformer_model.py # Transformer architecture
-│   └── ensemble_model.py  # LSTM + XGBoost ensemble
-│
-├── strategy/
-│   ├── trading_strategy.py # Signal generation logic
-│   └── risk_manager.py    # Position sizing & risk
-│
-├── backtest/
-│   ├── backtest_engine.py # Historical simulation
-│   └── performance_metrics.py # Sharpe, drawdown, etc.
-│
-├── utils/
-│   ├── config.py          # Configuration & stock list
-│   └── logger.py          # Logging utilities
-│
-└── frontend/
-    ├── package.json
-    ├── public/
-    └── src/
-        ├── App.jsx        # Main application
-        ├── components/    # React components
-        ├── hooks/         # Custom hooks
-        └── styles/        # CSS styles
+├── start.bat               # Quick launcher
+└── README.md
 ```
 
-## Supported Stocks
+---
 
-The analyzer supports major Saudi stocks including:
+## ⚠️ Disclaimer
 
-| Symbol | Company | Sector |
-|--------|---------|--------|
-| 2222 | Saudi Aramco | Energy |
-| 1120 | Al Rajhi Bank | Banking |
-| 2010 | SABIC | Materials |
-| 1180 | Al Ahli Bank | Banking |
-| 2380 | Petrochemical | Materials |
+This software is for **educational and research purposes only**. It does not constitute financial advice. Trading involves significant risk of loss. Always conduct your own research and consult with licensed financial advisors.
 
-See `utils/config.py` for the complete list.
+---
 
-## Model Architecture
+## 📄 License
 
-### LSTM with Attention
-- Bidirectional LSTM layers
-- Multi-head attention mechanism
-- Dropout regularization
-- Trained on 20+ technical features
+This project is licensed under the **MIT License** — see the [LICENSE](../LICENSE) file for details.
 
-### Ensemble Model
-- Combines LSTM neural network with XGBoost
-- Dynamic weight adjustment based on validation performance
-- Model caching for faster subsequent predictions
+---
 
-## Risk Metrics
+<div align="center">
 
-The platform calculates comprehensive risk metrics:
+**© 2026 Abdulrahman Asiri. All rights reserved.**
 
-- **Volatility** - Annualized standard deviation
-- **Sharpe Ratio** - Risk-adjusted returns
-- **Sortino Ratio** - Downside risk-adjusted returns
-- **Maximum Drawdown** - Largest peak-to-trough decline
-- **Value at Risk (VaR)** - 95% and 99% confidence levels
-- **Expected Shortfall (CVaR)** - Average loss beyond VaR
+*Engineered via Vibe Coding* 🚀
 
-## Disclaimer
-
-This software is for **educational and research purposes only**. It is not financial advice. Trading stocks involves significant risk of loss. Always:
-
-- Do your own research
-- Consult with a licensed financial advisor
-- Never invest more than you can afford to lose
-- Past performance does not guarantee future results
-
-The developers are not responsible for any financial losses incurred from using this software.
-
-## License
-
-MIT License - see [LICENSE](LICENSE) file for details.
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+</div>
