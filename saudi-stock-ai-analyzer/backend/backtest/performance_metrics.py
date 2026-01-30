@@ -1,3 +1,7 @@
+# Copyright (c) 2026 Abdulrahman Asiri.
+# Engineered via Vibe Coding.
+# Licensed under the MIT License.
+
 """
 Performance metrics calculation and reporting
 Calculates various trading and model performance metrics

@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Abdulrahman Asiri.
+// Engineered via Vibe Coding.
+// Licensed under the MIT License.
+
 /**
  * PositionCard Component
  * Displays individual position with P&L and actions

@@ -1,3 +1,7 @@
+# Copyright (c) 2026 Abdulrahman Asiri.
+# Engineered via Vibe Coding.
+# Licensed under the MIT License.
+
 """
 Data preprocessing and cleaning module for Saudi Stock AI Analyzer
 Includes technical indicators calculation and LSTM data preparation

@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Abdulrahman Asiri.
+// Engineered via Vibe Coding.
+// Licensed under the MIT License.
+
 /**
  * Landing Page Component - TASI AI
  * Premium, luxurious welcome screen with Framer Motion animations

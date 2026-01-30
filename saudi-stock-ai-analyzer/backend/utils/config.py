@@ -1,3 +1,7 @@
+# Copyright (c) 2026 Abdulrahman Asiri.
+# Engineered via Vibe Coding.
+# Licensed under the MIT License.
+
 """
 Configuration settings and constants for Saudi Stock AI Analyzer
 Version 3.0 - Advanced LSTM Edition (BiLSTM + Multi-Head Attention)

@@ -1,3 +1,7 @@
+# Copyright (c) 2026 Abdulrahman Asiri.
+# Engineered via Vibe Coding.
+# Licensed under the MIT License.
+
 """
 Parameter optimizer for finding optimal trading strategy parameters.
 Uses grid search to test different parameter combinations and find the best settings.

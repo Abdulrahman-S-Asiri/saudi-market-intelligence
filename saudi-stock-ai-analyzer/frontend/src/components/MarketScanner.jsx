@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Abdulrahman Asiri.
+// Engineered via Vibe Coding.
+// Licensed under the MIT License.
+
 /**
  * Market Scanner Component
  * Displays Top Projected Gainers and Losers based on AI predictions

@@ -1,3 +1,7 @@
+# Copyright (c) 2026 Abdulrahman Asiri.
+# Engineered via Vibe Coding.
+# Licensed under the MIT License.
+
 """
 FastAPI server for Saudi Stock AI Analyzer
 Provides REST API endpoints for the React frontend

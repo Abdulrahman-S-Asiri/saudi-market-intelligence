@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Abdulrahman Asiri.
+// Engineered via Vibe Coding.
+// Licensed under the MIT License.
+
 /**
  * Saudi Stock AI Analyzer - 2026 Edition
  * Clean, Modern, Minimalist Design

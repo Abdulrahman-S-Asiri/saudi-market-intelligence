@@ -1,3 +1,7 @@
+# Copyright (c) 2026 Abdulrahman Asiri.
+# Engineered via Vibe Coding.
+# Licensed under the MIT License.
+
 """
 Data Loader Module for Saudi Stock Market
 Fetches stock data from Saudi Arabian stock market (Tadawul)

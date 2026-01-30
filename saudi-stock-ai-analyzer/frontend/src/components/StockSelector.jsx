@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Abdulrahman Asiri.
+// Engineered via Vibe Coding.
+// Licensed under the MIT License.
+
 import React, { useState, useMemo } from 'react';
 import Select, { components } from 'react-select';
 import { motion, AnimatePresence } from 'framer-motion';

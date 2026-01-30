@@ -9,12 +9,11 @@ echo.
 cd /d "%~dp0"
 
 echo [*] Starting Backend Server (FastAPI)...
-start "Backend Server - Advanced LSTM" cmd /k "python app.py"
+start "Backend Server - Advanced LSTM" cmd /k "cd backend && python app.py"
 
 echo.
 echo [*] Starting Frontend (React)...
-cd frontend
-start "Frontend - TASI AI Analyzer" cmd /k "npm start"
+start "Frontend - TASI AI Analyzer" cmd /k "cd frontend && npm start"
 
 echo.
 echo ============================================================

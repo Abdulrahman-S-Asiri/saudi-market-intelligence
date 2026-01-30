@@ -1,3 +1,7 @@
+# Copyright (c) 2026 Abdulrahman Asiri.
+# Engineered via Vibe Coding.
+# Licensed under the MIT License.
+
 """
 Win Rate Tracker for tracking progress toward 80% win rate goal.
 Records experiment results and generates progress reports.

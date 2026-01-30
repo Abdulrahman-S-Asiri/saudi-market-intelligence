@@ -1,3 +1,7 @@
+# Copyright (c) 2026 Abdulrahman Asiri.
+# Engineered via Vibe Coding.
+# Licensed under the MIT License.
+
 """
 Main entry point for Saudi Stock AI Analyzer
 Orchestrates the complete analysis pipeline with Advanced LSTM model

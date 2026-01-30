@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Abdulrahman Asiri.
+// Engineered via Vibe Coding.
+// Licensed under the MIT License.
+
 /**
  * Market Signals Component
  * Displays top bullish and bearish stocks based on AI predictions
