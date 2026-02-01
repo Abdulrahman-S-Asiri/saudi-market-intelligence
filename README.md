@@ -1,190 +1,128 @@
+
+# 🇸🇦 Saudi Stock AI Analyzer (TASI Intelligence)
+
 <div align="center">
 
-# 🇸🇦 TASI AI Analyzer
+![Version](https://img.shields.io/badge/version-3.0.0-blue.svg?style=for-the-badge)
+![License](https://img.shields.io/badge/license-MIT-green.svg?style=for-the-badge)
+![Status](https://img.shields.io/badge/status-Enterprise--Grade-purple.svg?style=for-the-badge)
+![Python](https://img.shields.io/badge/Python-3.10%2B-yellow?style=for-the-badge&logo=python)
+![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react)
+![Vite](https://img.shields.io/badge/Vite-Lightning%20Fast-646CFF?style=for-the-badge&logo=vite)
 
-### Institutional-Grade Analysis for the Saudi Stock Market
+**Institutional-Grade Market Intelligence for the Saudi Exchange (Tadawul)**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Stack: FastAPI/React](https://img.shields.io/badge/Stack-FastAPI%20%7C%20React-blue.svg)](#tech-stack)
-[![Methodology: Vibe Coding](https://img.shields.io/badge/Methodology-Vibe%20Coding-purple.svg)](#-built-via-vibe-coding)
-
-<br />
-
-**Real-time AI predictions • Uncertainty quantification • Market regime detection**
-
-[Features](#-key-features) • [Installation](#-installation) • [Usage](#-usage) • [API](#-api-endpoints) • [License](#-license)
+[Features](#features) • [Architecture](#architecture) • [Getting Started](#getting-started) • [Tech Stack](#tech-stack)
 
 </div>
 
 ---
 
-## 🎯 Built via Vibe Coding
+## 🚀 Overview
 
-> **This project demonstrates the power of Vibe Coding** — a methodology that leverages high-bandwidth human-AI collaboration to engineer complex, production-ready systems rapidly.
+**Saudi Stock AI Analyzer** is a state-of-the-art financial analytics platform designed to bring hedge-fund quality insights to the Saudi Market. By combining **Deep Learning (BiLSTM + Attention)** with **Bayesian Uncertainty Estimation**, it moves beyond simple price prediction to provide scientifically calibrated trade confidence.
 
-Rather than traditional line-by-line coding, Vibe Coding focuses on:
-
-- 🧠 **Intent-driven development** — Describe what you want, not how to build it
-- ⚡ **Rapid iteration** — From concept to production in hours, not weeks
-- 🔄 **Continuous refinement** — Human creativity + AI execution in tight feedback loops
-- 🏗️ **Full-stack delivery** — Complete systems, not just snippets
-
-This entire platform — backend, frontend, ML models, and infrastructure — was engineered through Vibe Coding, showcasing what's possible when humans and AI collaborate at maximum bandwidth.
-
----
+Built with a **"Vibe Coding"** philosophy, the project merges rapid development with enterprise stability, featuring a high-performance **Vite** frontend and a modular **FastAPI** backend.
 
 ## ✨ Key Features
 
-### 🤖 **Real-time LSTM & Transformer Predictions**
-Advanced BiLSTM architecture with Multi-Head Attention mechanisms, trained on 35+ technical indicators for high-accuracy directional forecasting.
+### 🧠 Advanced AI Core
+- **BiLSTM + Multi-Head Attention**: Captures long-term dependencies and market sentiment nuances.
+- **Monte Carlo Dropout**: Provides calibrated confidence scores (25-95%) by quantifying model uncertainty, not just point predictions.
+- **Market Regime Detection**: HMM-based classification (Bull/Bear/Sideways) to adapt strategies dynamically.
 
-### 📊 **Monte Carlo Dropout for True Uncertainty Estimation**
-Go beyond point predictions. Our MC Dropout implementation provides calibrated confidence intervals, so you know *how certain* the model is about each prediction.
+### 📊 Professional Dashboard
+- **Real-Time Visualization**: Interactive charts powered by Lightweight Charts.
+- **Instant Response**: Optimized with **React Query** for caching and background updates.
+- **Smart Scanners**: Automatically ranks stocks by potential upside and signal strength.
 
-### 📈 **Market Regime Detection (Bull/Bear/Sideways)**
-Hidden Markov Model-based regime classification using the TASI Index. Automatically adapts trading strategies to current market conditions.
+### 🛡️ Risk Management
+- **Probabilistic Backtesting**: Runs Monte Carlo simulations to stress-test strategies.
+- **Comprehensive Metrics**: VaR (Value at Risk), Sharpe Ratio, Sortino Ratio, and Max Drawdown.
 
-### 🎨 **Interactive React Dashboard**
-Beautiful, responsive UI with real-time candlestick charts, technical indicators, signal history, and position management — all powered by TradingView's Lightweight Charts.
+## 🏗️ Architecture
 
-### 🛡️ **Comprehensive Risk Metrics**
-Sharpe Ratio, Sortino Ratio, Maximum Drawdown, Value at Risk (VaR), Expected Shortfall — institutional-grade risk analytics at your fingertips.
+The system is built as a distributed application with clean separation of concerns:
 
----
+```mermaid
+graph TD
+    User[Trader] --> |Interacts| UI[React + Vite Frontend]
+    UI --> |Requests Data| API[FastAPI Gateway]
+    
+    subgraph "Backend Core"
+        API --> |Routes| Router[Modular Routers]
+        Router --> |Orchestrates| Analyzer[Stock Analyzer]
+        Analyzer --> |Inference| Model[BiLSTM Model]
+        Analyzer --> |Strategy| Strat[Trading Strategy]
+        Model --> |Uncertainty| MC[Monte Carlo Engine]
+    end
+    
+    subgraph "Data Layer"
+        Analyzer --> |Fetch| YF[yfinance API]
+        Analyzer --> |Cache| Redis[(In-Memory Cache)]
+    end
+```
 
 ## 🛠️ Tech Stack
 
-| Layer | Technologies |
-|-------|--------------|
-| **Backend** | Python 3.10+, FastAPI, PyTorch, scikit-learn |
-| **Frontend** | React 18, Lightweight Charts, Framer Motion |
-| **ML Models** | BiLSTM, Multi-Head Attention, HMM, XGBoost |
-| **Data** | yfinance, pandas, numpy |
+### Frontend
+- **Framework**: React 18
+- **Build Tool**: Vite (Lightning fast HMR)
+- **State Management**: TanStack Query (React Query)
+- **Styling**: Tailwind CSS + Framer Motion
+- **Charting**: TradingView Lightweight Charts
+- **Testing**: Vitest + React Testing Library
 
----
+### Backend
+- **API**: FastAPI (High performance async framework)
+- **ML Engine**: PyTorch (Advanced LSTM, Attention)
+- **Data Processing**: Pandas, NumPy, Scikit-learn
+- **Testing**: Pytest
 
-## 📦 Installation
+## ⚡ Getting Started
 
-### Option 1: Docker (Recommended)
+### Prerequisites
+- Python 3.10+
+- Node.js 18+
 
+### 1. Backend Setup
 ```bash
-# Clone the repository
-git clone https://github.com/Abdulrahman-S-Asiri/saudi-market-intelligence.git
-cd saudi-market-intelligence/saudi-stock-ai-analyzer
-
-# Start all services
-docker-compose up
-```
-
-The application will be available at:
-- **Frontend:** http://localhost:3000
-- **Backend API:** http://localhost:8000
-- **API Docs:** http://localhost:8000/docs
-
-### Option 2: Manual Installation
-
-**Backend Setup:**
-```bash
-cd saudi-stock-ai-analyzer/backend
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-
-# Install dependencies
+cd backend
 pip install -r requirements.txt
-
-# Start the server
-python app.py
+python -m uvicorn app:app --reload
 ```
 
-**Frontend Setup:**
+### 2. Frontend Setup
 ```bash
-cd saudi-stock-ai-analyzer/frontend
-
-# Install dependencies
+cd frontend
 npm install
-
-# Start the development server
-npm start
+npm run dev
 ```
 
-### Quick Start (Windows)
+The application will be available at `http://localhost:3000`.
 
-Simply double-click `start.bat` to launch both servers automatically.
+## 🧪 Testing
 
----
+We maintain high code quality standards:
 
-## 🚀 Usage
-
-1. **Select a Stock** — Choose from 200+ TASI-listed stocks across 21 sectors
-2. **View Analysis** — Real-time AI predictions with confidence scores
-3. **Check Signals** — BUY/SELL/HOLD recommendations with technical justification
-4. **Monitor Regime** — See current market conditions (Bull/Bear/Sideways)
-5. **Track Positions** — Manage your portfolio with built-in position tracking
-
----
-
-## 📡 API Endpoints
-
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/stocks` | List all available stocks |
-| `GET /api/analyze/{symbol}` | Full analysis with ML prediction |
-| `GET /api/chart/{symbol}` | OHLCV data with indicators |
-| `GET /api/predict/{symbol}` | ML prediction with uncertainty |
-| `GET /api/regime` | Current market regime |
-| `GET /api/scanner` | Top gainers/losers scan |
-
-**Example:**
 ```bash
-curl http://localhost:8000/api/analyze/2222?period=6mo
+# Backend Tests
+cd backend
+pytest
+
+# Frontend Tests
+cd frontend
+npm run test
 ```
 
----
-
-## 📁 Project Structure
-
-```
-saudi-stock-ai-analyzer/
-├── backend/
-│   ├── app.py              # FastAPI server
-│   ├── main.py             # Analysis orchestrator
-│   ├── models/             # LSTM, Attention, HMM
-│   ├── data/               # Data loading & preprocessing
-│   ├── strategy/           # Trading signals & risk
-│   ├── backtest/           # Historical validation
-│   └── utils/              # Config & utilities
-│
-├── frontend/
-│   ├── src/
-│   │   ├── components/     # React components
-│   │   ├── hooks/          # Custom hooks
-│   │   └── styles/         # CSS styles
-│   └── public/
-│
-├── start.bat               # Quick launcher
-└── README.md
-```
-
----
-
-## ⚠️ Disclaimer
-
-This software is for **educational and research purposes only**. It does not constitute financial advice. Trading involves significant risk of loss. Always conduct your own research and consult with licensed financial advisors.
-
----
-
-## 📄 License
-
-This project is licensed under the **MIT License** — see the [LICENSE](../LICENSE) file for details.
+## 📈 Roadmap
+- [x] Migrate to Vite
+- [x] Implement Monte Carlo Uncertainty
+- [ ] Add Portfolio Optimization Agent
+- [ ] Deploy to Cloud (AWS/Azure)
 
 ---
 
 <div align="center">
-
-**© 2026 Abdulrahman Asiri. All rights reserved.**
-
-*Engineered via Vibe Coding* 🚀
-
+  <sub>Engineered by Abdulrahman Asiri with ❤️ and AI</sub>
 </div>

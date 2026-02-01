@@ -15,6 +15,7 @@ import PositionManager from './components/PositionManager';
 import LandingPage from './components/LandingPage';
 import MarketScanner from './components/MarketScanner';
 import usePositions from './hooks/usePositions';
+import { useStocks, useStockAnalysis, useChartData } from './hooks/useMarketData';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -69,8 +70,8 @@ const MiniChart = ({ data }) => {
       <svg viewBox="0 0 100 100" preserveAspectRatio="none">
         <defs>
           <linearGradient id="chartGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor={isUp ? "#00ffa3" : "#ff4757"} stopOpacity="0.4"/>
-            <stop offset="100%" stopColor={isUp ? "#00ffa3" : "#ff4757"} stopOpacity="0"/>
+            <stop offset="0%" stopColor={isUp ? "#00ffa3" : "#ff4757"} stopOpacity="0.4" />
+            <stop offset="100%" stopColor={isUp ? "#00ffa3" : "#ff4757"} stopOpacity="0" />
           </linearGradient>
         </defs>
         <polygon points={`0,100 ${points} 100,100`} fill="url(#chartGrad)" />
@@ -186,34 +187,40 @@ function App() {
     }
   }, [createFromSignal]);
 
-  // Fetch stocks list
-  useEffect(() => {
-    fetch(`${API_BASE}/api/stocks`)
-      .then(res => res.json())
-      .then(data => { if (data.stocks) setStocks(data.stocks); })
-      .catch(() => {});
-  }, []);
+  // React Query Hooks
+  const { data: stocksData } = useStocks();
+  const {
+    data: analysisData,
+    isLoading: analysisLoading,
+    error: analysisError
+  } = useStockAnalysis(selectedStock, '6mo', !!selectedStock && activeTab === 'analysis');
 
-  // Fetch analysis when stock changes
-  useEffect(() => {
-    if (!selectedStock) return;
-    setLoading(true);
-    setError(null);
+  const {
+    data: chartDataRes
+  } = useChartData(selectedStock, '6mo', !!selectedStock && activeTab === 'analysis');
 
-    Promise.all([
-      fetch(`${API_BASE}/api/analyze/${selectedStock}?period=6mo&train_model=true`),
-      fetch(`${API_BASE}/api/chart/${selectedStock}?period=6mo`)
-    ])
-      .then(async ([analysisRes, chartRes]) => {
-        const analysisData = await analysisRes.json();
-        const chartDataRes = await chartRes.json();
-        if (analysisData.error) throw new Error(analysisData.error);
-        setAnalysis(analysisData);
-        setChartData(chartDataRes.data || []);
-      })
-      .catch(err => setError(err.message))
-      .finally(() => setLoading(false));
-  }, [selectedStock]);
+  // Sync local state with query data
+  useEffect(() => {
+    if (stocksData?.stocks) {
+      setStocks(stocksData.stocks);
+    }
+  }, [stocksData]);
+
+  useEffect(() => {
+    if (analysisData) {
+      setAnalysis(analysisData);
+    }
+    if (chartDataRes?.data) {
+      setChartData(chartDataRes.data);
+    }
+    // Update loading state based on query status
+    setLoading(analysisLoading);
+    if (analysisError) {
+      setError(analysisError.message);
+    } else {
+      setError(null);
+    }
+  }, [analysisData, chartDataRes, analysisLoading, analysisError]);
 
   const currentStock = stocks.find(s => s.symbol === selectedStock) || {};
   const priceChange = analysis?.performance?.total_return || 0;
