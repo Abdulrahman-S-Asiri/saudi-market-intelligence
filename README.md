@@ -1,214 +1,263 @@
-# Saudi Stock AI Analyzer (TASI Intelligence)
-
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.0.0-blue.svg?style=for-the-badge)
-![License](https://img.shields.io/badge/license-MIT-green.svg?style=for-the-badge)
-![Python](https://img.shields.io/badge/Python-3.10%2B-yellow?style=for-the-badge&logo=python)
-![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react)
-![Vite](https://img.shields.io/badge/Vite-7-646CFF?style=for-the-badge&logo=vite)
+# Saudi Stock AI Analyzer
 
-**AI-Powered Market Intelligence for the Saudi Exchange (Tadawul)**
+### Institutional-Grade Market Intelligence for Tadawul (TASI)
 
-[Features](#features) | [Pages](#pages) | [Tech Stack](#tech-stack) | [Getting Started](#getting-started) | [API](#api-endpoints)
+[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://python.org)
+[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)](https://react.dev)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+<br />
+
+<img src="https://raw.githubusercontent.com/devicons/devicon/master/icons/react/react-original.svg" width="40" />&nbsp;&nbsp;
+<img src="https://raw.githubusercontent.com/devicons/devicon/master/icons/python/python-original.svg" width="40" />&nbsp;&nbsp;
+<img src="https://raw.githubusercontent.com/devicons/devicon/master/icons/pytorch/pytorch-original.svg" width="40" />&nbsp;&nbsp;
+<img src="https://raw.githubusercontent.com/devicons/devicon/master/icons/tailwindcss/tailwindcss-original.svg" width="40" />
+
+<br />
+<br />
+
+A production-ready financial analytics platform combining **BiLSTM neural networks** with **Monte Carlo uncertainty estimation** to deliver actionable trading signals for 200+ Saudi stocks.
+
+[Getting Started](#getting-started) · [Documentation](#api-reference) · [Architecture](#architecture)
 
 </div>
 
+<br />
+
 ---
+
+<br />
 
 ## Overview
 
-**Saudi Stock AI Analyzer** is a financial analytics platform that brings institutional-grade insights to the Saudi Market (TASI). It combines **Deep Learning (BiLSTM + Multi-Head Attention)** with **Monte Carlo Dropout** for calibrated confidence estimation, providing actionable trade signals with quantified uncertainty.
+Saudi Stock AI Analyzer provides hedge-fund quality analysis for the Saudi Exchange. The platform processes real-time market data through a deep learning pipeline that generates calibrated trading signals with confidence intervals.
 
-The platform covers **200+ Saudi stocks** across all TASI sectors including Energy, Banks, Materials, Telecom, Healthcare, REITs, and more.
+**Core Capabilities:**
 
-## Features
+| Capability | Description |
+|:-----------|:------------|
+| **Deep Learning Signals** | BiLSTM + Multi-Head Attention architecture trained on 40+ technical features |
+| **Uncertainty Quantification** | Monte Carlo Dropout provides calibrated confidence scores (25-95%) |
+| **Position Management** | Full portfolio tracking with P/L, risk metrics, and trade execution |
+| **Market Scanning** | Real-time ranking of stocks by predicted movement and signal strength |
 
-### AI-Powered Analysis
-- **BiLSTM + Multi-Head Attention**: Neural network architecture capturing long-term market dependencies
-- **Monte Carlo Dropout**: Scientifically calibrated confidence scores (25-95%) through Bayesian uncertainty estimation
-- **40+ Technical Features**: RSI, MACD, Bollinger Bands, ATR, OBV, Stochastic, ADX, and more
-- **Market Regime Detection**: Automatic classification of Bull/Bear/Sideways conditions
+<br />
 
-### Trading Signals
-- **BUY/SELL/HOLD Recommendations**: Clear actionable signals with confidence levels
-- **Entry/Exit Targets**: Suggested price points for trade execution
-- **Stop Loss & Take Profit**: Risk management levels calculated per signal
-- **Signal History**: Track past signals and performance
+## Architecture
 
-### Portfolio Management
-- **Position Tracking**: Open and manage positions directly from signals
-- **P/L Calculation**: Real-time profit/loss tracking
-- **Risk Metrics**: VaR, Sharpe Ratio, Sortino Ratio, Max Drawdown
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                  FRONTEND                                    │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐        │
+│  │  Dashboard  │  │  Analysis   │  │   Scanner   │  │  Portfolio  │        │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘        │
+│         └─────────────────┴─────────────────┴─────────────────┘             │
+│                                    │                                         │
+│                         React + TanStack Query                               │
+└─────────────────────────────────────┬───────────────────────────────────────┘
+                                      │ REST API
+┌─────────────────────────────────────┴───────────────────────────────────────┐
+│                                  BACKEND                                     │
+│  ┌──────────────────────────────────────────────────────────────────────┐   │
+│  │                         FastAPI Gateway                               │   │
+│  │              /analyze  /predict  /positions  /market-rankings         │   │
+│  └──────────────────────────────────┬───────────────────────────────────┘   │
+│                                     │                                        │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │
+│  │   Analyzer   │  │  ML Engine   │  │   Strategy   │  │   Backtest   │    │
+│  │              │◄─┤  BiLSTM +    │  │  Risk Mgmt   │  │    Engine    │    │
+│  │  Indicators  │  │  Attention   │  │  Regime Det  │  │  Monte Carlo │    │
+│  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘    │
+│                                     │                                        │
+│  ┌──────────────────────────────────┴───────────────────────────────────┐   │
+│  │                         Data Layer                                    │   │
+│  │                  yfinance API  ←→  SQLite Positions                   │   │
+│  └──────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
-### Market Scanner
-- **Top Movers**: Ranked stocks by predicted upside/downside
-- **Bulk Analysis**: Scan 30+ key stocks for opportunities
-- **Sector Coverage**: All major TASI sectors represented
-
-## Pages
-
-The application includes 4 main pages accessible via navigation:
-
-| Page | Description |
-|------|-------------|
-| **Dashboard** | Main trading view with interactive chart, AI signals, timeframe selector, and quick trade execution |
-| **Analysis** | Detailed stock analysis with technical indicators, ML predictions, risk metrics, and signal reasons |
-| **Scanner** | Market-wide scanner showing top bullish and bearish signals with confidence levels |
-| **Portfolio** | Position management with open/closed positions, P/L tracking, and trade history |
+<br />
 
 ## Tech Stack
 
+<table>
+<tr>
+<td width="50%" valign="top">
+
 ### Frontend
-| Technology | Purpose |
-|------------|---------|
-| React 18 | UI Framework |
-| Vite 7 | Build Tool & Dev Server |
-| React Router 7 | Client-side Navigation |
-| TanStack Query 5 | Data Fetching & Caching |
-| Tailwind CSS 3 | Styling |
-| Lightweight Charts | TradingView-style Charts |
-| Heroicons | Icons |
-| Axios | HTTP Client |
-| Vitest | Testing |
+- **React 18** — Component framework
+- **Vite 7** — Build tooling
+- **React Router 7** — Navigation
+- **TanStack Query 5** — Data management
+- **Tailwind CSS** — Styling
+- **Lightweight Charts** — Financial charts
+- **Vitest** — Testing
+
+</td>
+<td width="50%" valign="top">
 
 ### Backend
-| Technology | Purpose |
-|------------|---------|
-| FastAPI | Async API Framework |
-| PyTorch | Deep Learning (BiLSTM) |
-| Pandas/NumPy | Data Processing |
-| Scikit-learn | ML Utilities |
-| yfinance | Market Data |
-| SQLite | Position Storage |
-| Pytest | Testing |
+- **FastAPI** — Async API framework
+- **PyTorch** — Neural network engine
+- **Pandas / NumPy** — Data processing
+- **Scikit-learn** — ML utilities
+- **yfinance** — Market data feed
+- **SQLite** — Position storage
+- **Pytest** — Testing
+
+</td>
+</tr>
+</table>
+
+<br />
+
+## Getting Started
+
+### Prerequisites
+
+- Python 3.10 or higher
+- Node.js 18 or higher
+
+### Installation
+
+**1. Clone the repository**
+```bash
+git clone https://github.com/Abdulrahman-S-Asiri/saudi-market-intelligence.git
+cd saudi-market-intelligence/saudi-stock-ai-analyzer
+```
+
+**2. Start the backend**
+```bash
+cd backend
+pip install -r requirements.txt
+uvicorn app:app --reload --host 0.0.0.0 --port 8000
+```
+
+**3. Start the frontend**
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+**4. Access the application**
+```
+Frontend:  http://localhost:5173
+Backend:   http://localhost:8000
+API Docs:  http://localhost:8000/docs
+```
+
+<br />
+
+## API Reference
+
+### Analysis Endpoints
+
+| Method | Endpoint | Description |
+|:-------|:---------|:------------|
+| `GET` | `/api/stocks` | List all available stocks |
+| `GET` | `/api/analyze/{symbol}` | Full analysis with ML prediction |
+| `GET` | `/api/chart/{symbol}` | OHLCV price data |
+| `GET` | `/api/predict/{symbol}` | ML prediction only |
+| `GET` | `/api/backtest/{symbol}` | Strategy backtest results |
+| `GET` | `/api/signals/history/{symbol}` | Historical signals |
+| `GET` | `/api/compare?symbols=X,Y` | Multi-stock comparison |
+| `GET` | `/api/risk/{symbol}` | Risk metrics (VaR, Sharpe) |
+| `GET` | `/api/market-rankings` | Top movers scan |
+
+### Portfolio Endpoints
+
+| Method | Endpoint | Description |
+|:-------|:---------|:------------|
+| `GET` | `/api/positions` | List positions |
+| `POST` | `/api/positions` | Create position |
+| `GET` | `/api/positions/summary` | Portfolio summary |
+| `PUT` | `/api/positions/{id}/close` | Close position |
+| `DELETE` | `/api/positions/{id}` | Delete position |
+| `POST` | `/api/positions/from-signal/{symbol}` | Create from signal |
+
+### Query Parameters
+
+| Parameter | Valid Values | Default |
+|:----------|:-------------|:--------|
+| `period` | `1d`, `5d`, `1mo`, `3mo`, `6mo`, `1y`, `2y` | `6mo` |
+| `train_model` | `true`, `false` | `true` |
+| `min_confidence` | `0-100` | `60` |
+| `amount` | `1 - 1,000,000` | `10000` |
+
+<br />
 
 ## Project Structure
 
 ```
 saudi-stock-ai-analyzer/
+│
 ├── backend/
-│   ├── api/routers/          # API route handlers
-│   │   ├── analysis.py       # Stock analysis endpoints
-│   │   └── portfolio.py      # Position management endpoints
-│   ├── backtest/             # Backtesting engine
-│   ├── data/                 # Data loaders & signal storage
-│   ├── database/             # Position database
-│   ├── models/               # ML models & market regime
-│   ├── strategy/             # Trading strategy & risk management
-│   ├── utils/                # Config, validators, logging
-│   ├── app.py                # FastAPI application
-│   └── main.py               # Stock analyzer core
+│   ├── api/routers/         # Route handlers
+│   ├── backtest/            # Backtesting engine
+│   ├── data/                # Data loaders
+│   ├── database/            # Position storage
+│   ├── models/              # ML models
+│   ├── strategy/            # Trading logic
+│   ├── utils/               # Validators, config
+│   ├── app.py               # FastAPI app
+│   └── main.py              # Core analyzer
 │
 ├── frontend/
 │   ├── src/
-│   │   ├── api/              # API client
-│   │   ├── components/       # React components
-│   │   ├── hooks/            # Custom React hooks
-│   │   ├── pages/            # Page components
-│   │   │   ├── Dashboard.jsx
-│   │   │   ├── Analysis.jsx
-│   │   │   ├── Scanner.jsx
-│   │   │   └── Portfolio.jsx
-│   │   ├── styles/           # CSS styles
-│   │   ├── App.jsx           # Main app with routes
-│   │   └── index.jsx         # Entry point
+│   │   ├── api/             # API client
+│   │   ├── components/      # UI components
+│   │   ├── hooks/           # React hooks
+│   │   ├── pages/           # Route pages
+│   │   └── styles/          # CSS
 │   └── package.json
 │
 └── README.md
 ```
 
-## Getting Started
+<br />
 
-### Prerequisites
-- Python 3.10+
-- Node.js 18+
+## Market Coverage
 
-### Backend Setup
-```bash
-cd saudi-stock-ai-analyzer/backend
-pip install -r requirements.txt
-uvicorn app:app --reload
-```
-Backend runs at `http://localhost:8000`
+The platform covers **200+ stocks** across all Tadawul sectors:
 
-### Frontend Setup
-```bash
-cd saudi-stock-ai-analyzer/frontend
-npm install
-npm run dev
-```
-Frontend runs at `http://localhost:5173`
+| Sector | Examples |
+|:-------|:---------|
+| Energy | Saudi Aramco (2222), Petro Rabigh, Bahri |
+| Banks | Al Rajhi (1120), SNB (1182), Alinma (1180) |
+| Materials | SABIC (2010), Ma'aden (1211), Saudi Kayan |
+| Telecom | STC (7010), Mobily (7020), Zain (7030) |
+| Healthcare | Dr. Sulaiman Al Habib (4013), Mouwasat |
+| Utilities | Saudi Electricity (5110), ACWA Power |
+| Consumer | Almarai (2280), Jarir (4190), Al Othaim |
+| REITs | Riyad REIT (4330), Jadwa REIT (4331) |
 
-## API Endpoints
-
-### Analysis
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/stocks` | GET | List all available stocks |
-| `/api/analyze/{symbol}` | GET | Full stock analysis with ML prediction |
-| `/api/chart/{symbol}` | GET | OHLCV chart data |
-| `/api/predict/{symbol}` | GET | ML prediction only |
-| `/api/backtest/{symbol}` | GET | Run strategy backtest |
-| `/api/signals/history/{symbol}` | GET | Historical signals |
-| `/api/compare` | GET | Compare multiple stocks |
-| `/api/risk/{symbol}` | GET | Risk metrics |
-| `/api/market-rankings` | GET | Top bullish/bearish stocks |
-
-### Portfolio
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/positions` | GET | List all positions |
-| `/api/positions` | POST | Create new position |
-| `/api/positions/summary` | GET | Portfolio summary |
-| `/api/positions/{id}` | GET | Get position by ID |
-| `/api/positions/{id}` | PUT | Update position |
-| `/api/positions/{id}/close` | PUT | Close position |
-| `/api/positions/{id}` | DELETE | Delete position |
-| `/api/positions/from-signal/{symbol}` | POST | Create position from signal |
-
-### Input Validation
-All endpoints validate:
-- **Symbol**: Must be a valid TASI stock symbol
-- **Period**: Must be one of `1d`, `5d`, `1mo`, `3mo`, `6mo`, `1y`, `2y`
-- **Confidence**: 0-100 range
-- **Amount**: > 0 and <= 1,000,000
-- **Stop Loss %**: > 0 and <= 50
-- **Take Profit %**: > 0 and <= 500
+<br />
 
 ## Testing
 
 ```bash
-# Backend Tests
-cd saudi-stock-ai-analyzer/backend
-pytest
+# Backend
+cd backend && pytest
 
-# Frontend Tests
-cd saudi-stock-ai-analyzer/frontend
-npm test
+# Frontend
+cd frontend && npm test
 ```
 
-## Supported Stocks
-
-The platform supports **200+ stocks** across all TASI sectors:
-
-- **Energy**: Saudi Aramco (2222), Petro Rabigh, Bahri
-- **Banks**: Al Rajhi (1120), SNB (1182), Alinma (1180), Riyad Bank
-- **Materials**: SABIC (2010), Ma'aden (1211), Saudi Kayan
-- **Telecom**: STC (7010), Mobily (7020), Zain (7030)
-- **Healthcare**: Dr. Sulaiman Al Habib (4013), Mouwasat
-- **Utilities**: Saudi Electricity (5110), ACWA Power
-- **Consumer**: Almarai (2280), Jarir (4190), Al Othaim
-- **REITs**: Riyad REIT, Jadwa REIT, and more
-- **Insurance**: Bupa Arabia, Tawuniya
-- **Software**: Elm (7201), Solutions by STC
+<br />
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+
+<br />
 
 ---
 
 <div align="center">
-  <sub>Built by Abdulrahman Asiri</sub>
+<sub>Built by <a href="https://github.com/Abdulrahman-S-Asiri">Abdulrahman Asiri</a></sub>
 </div>
