@@ -7,7 +7,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 vi.mock('./hooks/useMarketData', () => ({
     useStocks: vi.fn(() => ({ data: { stocks: [] } })),
     useStockAnalysis: vi.fn(() => ({ data: null, isLoading: false, error: null })),
-    useChartData: vi.fn(() => ({ data: null }))
+    useChartData: vi.fn(() => ({ data: null })),
+    useMarketRankings: vi.fn(() => ({ data: null, isLoading: false }))
 }));
 
 vi.mock('./hooks/usePositions', () => ({
@@ -32,6 +33,6 @@ describe('App', () => {
             </QueryClientProvider>
         );
         // Use a text matcher for something we know is in the header
-        expect(screen.getByText(/TASI AI/i)).toBeInTheDocument();
+        expect(screen.getByText(/SAUDI/i)).toBeInTheDocument();
     });
 });

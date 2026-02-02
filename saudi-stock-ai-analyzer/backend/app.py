@@ -13,7 +13,7 @@ import os
 import asyncio
 import time
 from datetime import datetime
-from fastapi import FastAPI, BackgroundTasks, Query
+from fastapi import FastAPI, BackgroundTasks, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 # Add project root to path

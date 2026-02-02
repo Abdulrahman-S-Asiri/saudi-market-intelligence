@@ -163,5 +163,93 @@
       "macd": 1.0040854109139161,
       "regime": "sideways"
     }
+  },
+  {
+    "timestamp": "2026-02-01T08:51:47.054058",
+    "signal": "HOLD",
+    "confidence": 47.2,
+    "price": 56.849998474121094,
+    "indicators": {
+      "rsi": 68.12225953999085,
+      "macd": 1.0040854109139161,
+      "regime": "sideways"
+    }
+  },
+  {
+    "timestamp": "2026-02-01T08:53:25.316125",
+    "signal": "HOLD",
+    "confidence": 47.2,
+    "price": 56.849998474121094,
+    "indicators": {
+      "rsi": 68.12225953999085,
+      "macd": 1.0040854109139161,
+      "regime": "sideways"
+    }
+  },
+  {
+    "timestamp": "2026-02-01T11:35:41.681768",
+    "signal": "HOLD",
+    "confidence": 47.2,
+    "price": 55.349998474121094,
+    "indicators": {
+      "rsi": 51.869148049816374,
+      "macd": 0.9082214373579376,
+      "regime": "sideways"
+    }
+  },
+  {
+    "timestamp": "2026-02-01T19:50:45.771492",
+    "signal": "HOLD",
+    "confidence": 47.2,
+    "price": 55.54999923706055,
+    "indicators": {
+      "rsi": 52.85713559105283,
+      "macd": 0.9241759141736168,
+      "regime": "sideways"
+    }
+  },
+  {
+    "timestamp": "2026-02-01T19:54:21.142633",
+    "signal": "HOLD",
+    "confidence": 47.2,
+    "price": 55.54999923706055,
+    "indicators": {
+      "rsi": 52.85713559105283,
+      "macd": 0.9241759141736168,
+      "regime": "sideways"
+    }
+  },
+  {
+    "timestamp": "2026-02-02T09:22:50.884818",
+    "signal": "HOLD",
+    "confidence": 47.2,
+    "price": 55.54999923706055,
+    "indicators": {
+      "rsi": 52.85713559105283,
+      "macd": 0.9241759141736168,
+      "regime": "sideways"
+    }
+  },
+  {
+    "timestamp": "2026-02-02T09:32:51.132821",
+    "signal": "HOLD",
+    "confidence": 47.2,
+    "price": 55.54999923706055,
+    "indicators": {
+      "rsi": 52.85713559105283,
+      "macd": 0.9183782982726072,
+      "regime": "sideways"
+    }
+  },
+  {
+    "timestamp": "2026-02-02T12:49:33.582487",
+    "signal": "HOLD",
+    "confidence": 45.5,
+    "price": 54.79999923706055,
+    "indicators": {
+      "rsi": 49.3333265516493,
+      "macd": 0.8643468543445536,
+      "regime": "sideways"
+    }
   }
 ]

@@ -1,0 +1,24 @@
+[
+  {
+    "timestamp": "2026-02-02T09:24:23.568221",
+    "signal": "HOLD",
+    "confidence": 37.0,
+    "price": 6.860000133514404,
+    "indicators": {
+      "rsi": 50.92025203921064,
+      "macd": -0.04241296844839937,
+      "regime": "downtrend"
+    }
+  },
+  {
+    "timestamp": "2026-02-02T09:32:49.305556",
+    "signal": "HOLD",
+    "confidence": 37.0,
+    "price": 6.860000133514404,
+    "indicators": {
+      "rsi": 50.92025203921064,
+      "macd": -0.04241296844839937,
+      "regime": "downtrend"
+    }
+  }
+]

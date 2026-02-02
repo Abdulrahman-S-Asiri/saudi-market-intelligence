@@ -118,11 +118,11 @@ yarn-error.log*
 
 # Model artifacts (large files)
 # ============================================
-models/saved/*.pt
-models/saved/*.pth
-models/saved/*.h5
-models/saved/*.pkl
-models/scalers/*.pkl
+**/models/saved/*.pt
+**/models/saved/*.pth
+**/models/saved/*.h5
+**/models/saved/*.pkl
+**/models/scalers/*.pkl
 *.ckpt
 
 # Claude Code settings

@@ -7,56 +7,58 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Custom AI Dashboard colors
-        'ai-purple': {
-          50: '#faf5ff',
-          100: '#f3e8ff',
-          200: '#e9d5ff',
-          300: '#d8b4fe',
-          400: '#c084fc',
-          500: '#a855f7',
-          600: '#9333ea',
-          700: '#7c3aed',
-          800: '#6b21a8',
-          900: '#581c87',
+        // Ultra-premium dark mode background
+        dark: {
+          950: '#020617', // Main background (almost black blue)
+          900: '#0f172a', // Secondary background (cards)
+          800: '#1e293b', // Borders/Separators
+          700: '#334155', // Muted text
+          600: '#475569', // Hover states
+          500: '#64748b', // Lighter text
         },
-        'ai-cyan': {
-          50: '#ecfeff',
-          100: '#cffafe',
-          200: '#a5f3fc',
-          300: '#67e8f9',
-          400: '#22d3ee',
-          500: '#06b6d4',
-          600: '#0891b2',
-          700: '#0e7490',
-          800: '#155e75',
-          900: '#164e63',
+        // Neon Accents for Financial Data
+        trade: {
+          up: '#00dc82',     // Vivid Green
+          down: '#ff2b2b',   // Vivid Red
+          neutral: '#94a3b8', // Slate
+          glow: '#00dc8240', // Green Glow opacity
         },
+        // Brand Colors
+        brand: {
+          primary: '#3b82f6', // Bright Blue
+          secondary: '#8b5cf6', // Violet
+          accent: '#06b6d4', // Cyan
+        }
       },
-      animation: {
-        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        'glow': 'glow 2s ease-in-out infinite alternate',
-        'float': 'float 6s ease-in-out infinite',
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+        mono: ['JetBrains Mono', 'Fira Code', 'monospace'], // For numbers/tickers
       },
-      keyframes: {
-        glow: {
-          '0%': { boxShadow: '0 0 20px rgba(168, 85, 247, 0.4)' },
-          '100%': { boxShadow: '0 0 30px rgba(168, 85, 247, 0.6)' },
-        },
-        float: {
-          '0%, 100%': { transform: 'translateY(0px)' },
-          '50%': { transform: 'translateY(-10px)' },
-        },
-      },
-      backdropBlur: {
-        xs: '2px',
+      backgroundImage: {
+        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
+        'grid-pattern': "url(\"data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%2394a3b8' fill-opacity='0.05' fill-rule='evenodd'%3E%3Cpath d='M0 40L40 0H20L0 20M40 40V20L20 40'/%3E%3C/g%3E%3C/svg%3E\")",
       },
       boxShadow: {
-        'glow-purple': '0 0 20px rgba(168, 85, 247, 0.4)',
-        'glow-cyan': '0 0 20px rgba(6, 182, 212, 0.4)',
-        'glow-green': '0 0 20px rgba(34, 197, 94, 0.4)',
-        'glow-red': '0 0 20px rgba(239, 68, 68, 0.4)',
+        'glass': '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
+        'neon-green': '0 0 10px rgba(0, 220, 130, 0.5), 0 0 20px rgba(0, 220, 130, 0.3)',
+        'neon-red': '0 0 10px rgba(255, 43, 43, 0.5), 0 0 20px rgba(255, 43, 43, 0.3)',
+        'neon-blue': '0 0 15px rgba(59, 130, 246, 0.6)',
       },
+      animation: {
+        'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'float': 'float 6s ease-in-out infinite',
+        'ticker': 'ticker 30s linear infinite',
+      },
+      keyframes: {
+        float: {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-10px)' },
+        },
+        ticker: {
+          '0%': { transform: 'translateX(0)' },
+          '100%': { transform: 'translateX(-100%)' },
+        }
+      }
     },
   },
   plugins: [],

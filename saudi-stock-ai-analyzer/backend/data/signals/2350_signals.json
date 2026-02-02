@@ -163,5 +163,82 @@
       "macd": -0.008120073114826099,
       "regime": "sideways"
     }
+  },
+  {
+    "timestamp": "2026-02-01T08:51:47.474953",
+    "signal": "HOLD",
+    "confidence": 40.0,
+    "price": 4.900000095367432,
+    "indicators": {
+      "rsi": 60.204096031109245,
+      "macd": -0.008120073114826099,
+      "regime": "sideways"
+    }
+  },
+  {
+    "timestamp": "2026-02-01T08:53:25.649181",
+    "signal": "HOLD",
+    "confidence": 40.0,
+    "price": 4.900000095367432,
+    "indicators": {
+      "rsi": 60.204096031109245,
+      "macd": -0.008120073114826099,
+      "regime": "sideways"
+    }
+  },
+  {
+    "timestamp": "2026-02-01T11:35:42.108764",
+    "signal": "HOLD",
+    "confidence": 44.8,
+    "price": 4.820000171661377,
+    "indicators": {
+      "rsi": 47.77777895515397,
+      "macd": -0.003492903503287792,
+      "regime": "sideways"
+    }
+  },
+  {
+    "timestamp": "2026-02-01T19:50:46.265012",
+    "signal": "HOLD",
+    "confidence": 44.8,
+    "price": 4.760000228881836,
+    "indicators": {
+      "rsi": 44.791669253675,
+      "macd": -0.008279223725017992,
+      "regime": "sideways"
+    }
+  },
+  {
+    "timestamp": "2026-02-01T19:54:21.546887",
+    "signal": "HOLD",
+    "confidence": 44.8,
+    "price": 4.760000228881836,
+    "indicators": {
+      "rsi": 44.791669253675,
+      "macd": -0.008279223725017992,
+      "regime": "sideways"
+    }
+  },
+  {
+    "timestamp": "2026-02-02T09:22:51.321106",
+    "signal": "HOLD",
+    "confidence": 44.8,
+    "price": 4.760000228881836,
+    "indicators": {
+      "rsi": 44.791669253675,
+      "macd": -0.008279223725017992,
+      "regime": "sideways"
+    }
+  },
+  {
+    "timestamp": "2026-02-02T12:49:33.913279",
+    "signal": "HOLD",
+    "confidence": 42.4,
+    "price": 4.710000038146973,
+    "indicators": {
+      "rsi": 42.57425088155882,
+      "macd": -0.012267842928938677,
+      "regime": "sideways"
+    }
   }
 ]
