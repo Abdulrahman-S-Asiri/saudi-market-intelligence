@@ -2,6 +2,10 @@ from fastapi import APIRouter, HTTPException, Query, Body
 from typing import Optional, List
 from database import PositionManager, PositionCreate, PositionUpdate, PositionClose
 from main import StockAnalyzer
+from utils.validators import (
+    validate_symbol, validate_status,
+    validate_amount, validate_stop_loss_pct, validate_take_profit_pct
+)
 
 router = APIRouter(prefix="/api/positions", tags=["positions"])
 position_manager = PositionManager()
@@ -12,7 +16,18 @@ async def list_positions(
     status: Optional[str] = Query(None, description="Filter by status (OPEN, CLOSED)"),
     symbol: Optional[str] = Query(None, description="Filter by symbol")
 ):
-    positions = position_manager.get_positions(status=status, symbol=symbol)
+    # Validate inputs if provided
+    if status:
+        validate_status(status)
+    if symbol:
+        validate_symbol(symbol)
+
+    if symbol:
+        positions = position_manager.get_positions_by_symbol(symbol)
+        if status:
+            positions = [p for p in positions if p['status'] == status]
+    else:
+        positions = position_manager.get_all_positions(status=status)
     return positions
 
 @router.post("")
@@ -27,7 +42,7 @@ async def create_position(position: PositionCreate):
 
 @router.get("/summary")
 async def get_portfolio_summary():
-    return position_manager.get_portfolio_summary()
+    return position_manager.get_summary()
 
 @router.get("/{position_id}")
 async def get_position(position_id: str):
@@ -79,6 +94,12 @@ async def create_position_from_signal(
     stop_loss_pct: float = Query(default=5.0, description="Stop loss percentage"),
     take_profit_pct: float = Query(default=10.0, description="Take profit percentage")
 ):
+    # Validate inputs
+    validate_symbol(symbol)
+    validate_amount(amount)
+    validate_stop_loss_pct(stop_loss_pct)
+    validate_take_profit_pct(take_profit_pct)
+
     try:
         # Get latest analysis
         analysis = analyzer.analyze_stock(symbol, period="3mo", train_model=False)

@@ -29,3 +29,17 @@ export const fetchChartData = async (symbol, period = '6mo') => {
     });
     return response.data;
 };
+
+export const fetchMarketRankings = async (quickScan = true) => {
+    const response = await apiClient.get('/market-rankings', {
+        params: { quick_scan: quickScan }
+    });
+    return response.data;
+};
+
+export const createPositionFromSignal = async (symbol, amount = 10000, stopLossPct = 5.0, takeProfitPct = 10.0) => {
+    const response = await apiClient.post(`/positions/from-signal/${symbol}`, null, {
+        params: { amount, stop_loss_pct: stopLossPct, take_profit_pct: takeProfitPct }
+    });
+    return response.data;
+};
